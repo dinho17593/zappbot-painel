@@ -1,0 +1,16 @@
+# Arquivos de log e bancos de dados locais
+*.log
+bots.json
+users.json
+ips.json
+settings.json
+
+# Pastas de sessão e autenticação
+/auth_sessions/
+/sessions/
+
+# Dependências do Node.js
+/node_modules/
+
+# Arquivo de ambiente
+.env
