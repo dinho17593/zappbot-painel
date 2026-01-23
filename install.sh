@@ -1,17 +1,6 @@
----
+#!/bin/bash
 
-### **Passo 2: Corrija o `install.sh` no seu Repositório Principal (A VERSÃO FINAL E CORRETA)**
-
-Agora, o script principal, que fará exatamente o que você pediu.
-
-1.  Vá para o seu repositório: `https://github.com/dinho17593/zappbot-painel`
-2.  Edite o arquivo `install.sh`.
-3.  **Apague todo o conteúdo** e substitua por este:
-
-```bash
-#!/bin-bash
-
-# --- SCRIPT DE INSTALAÇÃO FINAL E CORRETO (PERGUNTA O DOMÍNIO / ENV MANUAL) ---
+# --- SCRIPT DE INSTALAÇÃO FINAL (CORRIGIDO) ---
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -29,24 +18,25 @@ if [ -z "$DOMAIN" ]; then
 fi
 log_info "Iniciando instalação para o domínio: ${DOMAIN}"
 
-# --- 2. Instalar Node.js e dependências de sistema ---
-log_info "Configurando Node.js v18..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - > /dev/null
-log_info "Instalando dependências de sistema (Node.js, Nginx, Baileys)..."
-sudo apt-get install -y nodejs nginx build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev > /dev/null
+# --- 2. Instalar Node.js e dependências ---
+log_info "Configurando repositório do Node.js v18..."
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+
+log_info "Instalando dependências de sistema..."
+sudo apt-get install -y nodejs nginx build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
 
 # --- 3. Instalar dependências do projeto ---
 INSTALL_DIR=$(pwd)
-log_info "Instalando dependências do projeto com npm..."
+log_info "Instalando dependências do projeto (npm install)..."
 sudo npm install
 
 # --- 4. Instalar e configurar PM2 ---
-log_info "Instalando e configurando PM2..."
+log_info "Instalando PM2 Globalmente..."
 sudo npm install pm2 -g
 sudo pm2 startup systemd
 
-# --- 5. Criar o arquivo .env de modelo (SEM PERGUNTAS) ---
-log_info "Criando o arquivo de configuração .env de modelo..."
+# --- 5. Criar o arquivo .env de modelo ---
+log_info "Gerando arquivo .env..."
 sudo tee ${INSTALL_DIR}/.env > /dev/null <<EOF
 # --- EDITE OS VALORES ABAIXO COM SUAS CHAVES ---
 
@@ -61,7 +51,7 @@ COLE_SUA_SEGUNDA_API_KEY_GEMINI_AQUI"
 EOF
 
 # --- 6. Configurar Nginx (HTTP) ---
-log_info "Configurando o Nginx para operar em HTTP na porta 80..."
+log_info "Configurando Nginx..."
 NGINX_CONF="/etc/nginx/sites-available/zappbot"
 sudo tee $NGINX_CONF > /dev/null <<EOF
 server {
@@ -80,13 +70,13 @@ sudo ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
 if [ -f /etc/nginx/sites-enabled/default ]; then sudo rm /etc/nginx/sites-enabled/default; fi
 sudo systemctl restart nginx
 
-# --- 7. Configurar Firewall (HTTP) ---
-log_info "Configurando o firewall para permitir tráfego HTTP..."
+# --- 7. Configurar Firewall ---
+log_info "Liberando Firewall..."
 sudo ufw allow 'Nginx HTTP' > /dev/null
 sudo ufw --force enable > /dev/null
 
-# --- 8. Iniciar a aplicação com PM2 ---
-log_info "Iniciando a aplicação com PM2..."
+# --- 8. Iniciar a aplicação ---
+log_info "Iniciando aplicação no PM2..."
 cd $INSTALL_DIR
 sudo pm2 delete zappbot >/dev/null 2>&1
 sudo pm2 start server.js --name zappbot
@@ -95,9 +85,9 @@ sudo pm2 save
 # --- FINALIZAÇÃO ---
 log_info "--------------------------------------------------------"
 log_info "✅ Instalação concluída com sucesso!"
-log_warn "AÇÃO OBRIGATÓRIA: Edite o arquivo .env com suas chaves!"
-log_info "Use o comando: sudo nano ${INSTALL_DIR}/.env"
-log_info "Após salvar, reinicie a aplicação com o comando:"
-log_info "sudo pm2 restart zappbot"
-log_info "Seu ZappBot estará disponível em: https://${DOMAIN}"
+log_warn "⚠️  IMPORTANTE: Edite o arquivo .env com suas chaves!"
+log_info "   Comando: sudo nano ${INSTALL_DIR}/.env"
+log_info "   Depois salve (Ctrl+O) e saia (Ctrl+X)"
+log_info "   E reinicie: sudo pm2 restart zappbot"
 log_info "--------------------------------------------------------"
+log_info "Acesse em: http://${DOMAIN}"
