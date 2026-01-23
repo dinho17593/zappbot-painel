@@ -1,4 +1,15 @@
-#!/bin/bash
+---
+
+### **Passo 2: Corrija o `install.sh` no seu Repositório Principal (A VERSÃO FINAL E CORRETA)**
+
+Agora, o script principal, que fará exatamente o que você pediu.
+
+1.  Vá para o seu repositório: `https://github.com/dinho17593/zappbot-painel`
+2.  Edite o arquivo `install.sh`.
+3.  **Apague todo o conteúdo** e substitua por este:
+
+```bash
+#!/bin-bash
 
 # --- SCRIPT DE INSTALAÇÃO FINAL E CORRETO (PERGUNTA O DOMÍNIO / ENV MANUAL) ---
 GREEN='\033[0;32m'
