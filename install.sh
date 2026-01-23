@@ -1,6 +1,46 @@
 #!/bin/bash
 
-# --- SCRIPT DE INSTALAÇÃO PRINCIPAL (VERSÃO DEFINITIVA E CORRIGIDA) ---
+# --- INSTALADOR RÁPIDO (VERSÃO CORRETA) ---
+# Este script baixa e inicia a instalação do projeto principal.
+
+# URL do seu projeto principal
+PROJECT_ZIP_URL="https://github.com/dinho17593/zappbot-painel/archive/refs/heads/main.zip"
+EXTRACTED_FOLDER_NAME="zappbot-painel-main"
+ZIP_FILE="project.zip"
+
+echo "Instalando dependências para o download (wget, unzip)..."
+sudo apt-get update > /dev/null
+sudo apt-get install -y wget unzip > /dev/null
+
+echo "Baixando o projeto ZappBot..."
+wget -q --show-progress "$PROJECT_ZIP_URL" -O $ZIP_FILE
+
+echo "Descompactando projeto..."
+unzip -o $ZIP_FILE > /dev/null
+rm $ZIP_FILE
+
+cd $EXTRACTED_FOLDER_NAME
+chmod +x install.sh
+
+# Executa o script principal, que fará a pergunta do domínio
+echo "Iniciando a instalação principal..."
+sudo ./install.sh
+```4.  Clique em **"Update public gist"**.
+
+---
+
+### **Passo 2: Corrija o `install.sh` no seu Repositório Principal (A VERSÃO FINAL E CORRETA)**
+
+Agora, o script principal, que fará exatamente o que você pediu.
+
+1.  Vá para o seu repositório: `https://github.com/dinho17593/zappbot-painel`
+2.  Edite o arquivo `install.sh`.
+3.  **Apague todo o conteúdo** e substitua por este:
+
+```bash
+#!/bin-bash
+
+# --- SCRIPT DE INSTALAÇÃO FINAL E CORRETO (PERGUNTA O DOMÍNIO / ENV MANUAL) ---
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -10,31 +50,86 @@ log_info() { echo -e "${GREEN}[INFO] $1${NC}"; }
 log_warn() { echo -e "${YELLOW}[AVISO] $1${NC}"; }
 log_error() { echo -e "${RED}[ERRO] $1${NC}"; }
 
-log_info "Iniciando a instalação principal do ZappBot..."
-
-# --- 1. Perguntar pelas informações necessárias ---
+# --- 1. Perguntar APENAS o domínio ---
 read -p "Digite seu domínio (ex: zappbot.shop): " DOMAIN
-if [ -z "$DOMAIN" ]; then log_error "Domínio é obrigatório."; exit 1; fi
+if [ -z "$DOMAIN" ]; then
+    log_error "ERRO: O domínio não pode ser vazio."
+    exit 1
+fi
+log_info "Iniciando instalação para o domínio: ${DOMAIN}"
 
-read -p "Digite seu email para o certificado SSL: " USER_EMAIL
-if [ -z "$USER_EMAIL" ]; then log_error "Email é obrigatório."; exit 1; fi
+# --- 2. Instalar Node.js e dependências de sistema ---
+log_info "Configurando Node.js v18..."
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - > /dev/null
+log_info "Instalando dependências de sistema (Node.js, Nginx, Baileys)..."
+sudo apt-get install -y nodejs nginx build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev > /dev/null
 
-read -p "Cole seu GOOGLE_CLIENT_ID: " GOOGLE_CLIENT_ID
-if [ -z "$GOOGLE_CLIENT_ID" ]; then log_error "Google Client ID é obrigatório."; exit 1; fi
+# --- 3. Instalar dependências do projeto ---
+INSTALL_DIR=$(pwd)
+log_info "Instalando dependências do projeto com npm..."
+sudo npm install
 
-read -s -p "Cole seu GOOGLE_CLIENT_SECRET: " GOOGLE_CLIENT_SECRET
-echo "" # Adiciona uma nova linha após a senha
-if [ -z "$GOOGLE_CLIENT_SECRET" ]; then log_error "Google Client Secret é obrigatório."; exit 1; fi
+# --- 4. Instalar e configurar PM2 ---
+log_info "Instalando e configurando PM2..."
+sudo npm install pm2 -g
+sudo pm2 startup systemd
 
-log_info "Agora, cole suas chaves da API Gemini. Pressione ENTER após cada chave."
-log_info "Quando terminar, pressione ENTER em uma linha vazia para continuar."
+# --- 5. Criar o arquivo .env de modelo (SEM PERGUNTAS) ---
+log_info "Criando o arquivo de configuração .env de modelo..."
+sudo tee ${INSTALL_DIR}/.env > /dev/null <<EOF
+# --- EDITE OS VALORES ABAIXO COM SUAS CHAVES ---
 
-API_KEYS_GEMINI=""
-while true; do
-    read -p "Chave Gemini: " key
-    if [ -z "$key" ]; then
-        break
-    fi
+# Configurações do Google Login
+GOOGLE_CLIENT_ID="COLE_SEU_GOOGLE_CLIENT_ID_AQUI"
+GOOGLE_CLIENT_SECRET="COLE_SEU_GOOGLE_CLIENT_SECRET_AQUI"
+GOOGLE_CALLBACK_URL="https://${DOMAIN}/auth/google/callback"
+
+# Chaves da API Gemini (uma por linha)
+API_KEYS_GEMINI="COLE_SUA_PRIMEIRA_API_KEY_GEMINI_AQUI
+COLE_SUA_SEGUNDA_API_KEY_GEMINI_AQUI"
+EOF
+
+# --- 6. Configurar Nginx (HTTP) ---
+log_info "Configurando o Nginx para operar em HTTP na porta 80..."
+NGINX_CONF="/etc/nginx/sites-available/zappbot"
+sudo tee $NGINX_CONF > /dev/null <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+    }
+}
+EOF
+sudo ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
+if [ -f /etc/nginx/sites-enabled/default ]; then sudo rm /etc/nginx/sites-enabled/default; fi
+sudo systemctl restart nginx
+
+# --- 7. Configurar Firewall (HTTP) ---
+log_info "Configurando o firewall para permitir tráfego HTTP..."
+sudo ufw allow 'Nginx HTTP' > /dev/null
+sudo ufw --force enable > /dev/null
+
+# --- 8. Iniciar a aplicação com PM2 ---
+log_info "Iniciando a aplicação com PM2..."
+cd $INSTALL_DIR
+sudo pm2 delete zappbot >/dev/null 2>&1
+sudo pm2 start server.js --name zappbot
+sudo pm2 save
+
+# --- FINALIZAÇÃO ---
+log_info "--------------------------------------------------------"
+log_info "✅ Instalação concluída com sucesso!"
+log_warn "AÇÃO OBRIGATÓRIA: Edite o arquivo .env com suas chaves!"
+log_info "Use o comando: sudo nano ${INSTALL_DIR}/.env"
+log_info "Após salvar, reinicie a aplicação com o comando:"
+log_info "sudo pm2 restart zappbot"
+log_info "Seu ZappBot estará disponível em: https://${DOMAIN}"
+log_info "--------------------------------------------------------"    fi
     API_KEYS_GEMINI+="${key}\n"
 done
 
