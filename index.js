@@ -13,10 +13,12 @@ const fs = require('fs');
 const nomeSessao = process.argv[2];
 const promptSistema = process.argv[3];
 const ignoredIdentifiersArg = process.argv[4] || '[]';
+const phoneNumberArg = process.argv[5]; 
+
 const modeloGemini = 'gemini-flash-latest';
 
 if (!nomeSessao || !promptSistema) {
-    console.error('❌ Uso correto: node index.js "nome-sessao" "Você é um vendedor..." \'[{"type":"name","value":"Joao"}]\'');
+    console.error('❌ Uso correto: node index.js "nome-sessao" "Você é um vendedor..." \'[{"type":"name","value":"Joao"}]\' [numero-telefone]');
     process.exit(1);
 }
 
@@ -122,16 +124,33 @@ async function ligarBot() {
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
-        version, logger, printQRInTerminal: false, auth: state,
-        syncFullHistory: false, markOnlineOnConnect: true,
+        version, 
+        logger, 
+        printQRInTerminal: false, 
+        auth: state,
+        syncFullHistory: false, 
+        markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
+        browser: ["Ubuntu", "Chrome", "20.0.04"], 
         getMessage: async () => ({ conversation: 'hello' })
     });
+
+    if (phoneNumberArg && !sock.authState.creds.me) {
+        console.log(`[${nomeSessao}] Solicitando código de pareamento para: ${phoneNumberArg}`);
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(phoneNumberArg);
+                console.log(`PAIRING_CODE:${code}`);
+            } catch (err) {
+                console.error('Erro ao solicitar pairing code:', err);
+            }
+        }, 3000);
+    }
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
+        if (qr && !phoneNumberArg) {
             console.log(`QR_CODE:${qr}`);
         }
 
