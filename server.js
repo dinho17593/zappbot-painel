@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 const FileStore = require('session-file-store')(session);
 const passport = require('passport');
@@ -16,28 +17,35 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// --- CONFIGURAÇÃO E BANCOS DE DADOS ---
-const BOTS_DB_PATH = './bots.json';
-const USERS_DB_PATH = './users.json';
-const IPS_DB_PATH = './ips.json';
-const SETTINGS_DB_PATH = './settings.json';
-const AUTH_SESSIONS_DIR = path.join(__dirname, 'auth_sessions');
-const SESSION_FILES_DIR = path.join(__dirname, 'sessions');
+const BASE_DIR = __dirname;
+const BOTS_DB_PATH = path.join(BASE_DIR, 'bots.json');
+const USERS_DB_PATH = path.join(BASE_DIR, 'users.json');
+const SETTINGS_DB_PATH = path.join(BASE_DIR, 'settings.json');
+const AUTH_SESSIONS_DIR = path.join(BASE_DIR, 'auth_sessions');
+const SESSION_FILES_DIR = path.join(BASE_DIR, 'sessions');
+const BOT_SCRIPT_PATH = path.join(BASE_DIR, 'index.js');
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : null;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.trim() : null;
 const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || "https://zappbot.shop/auth/google/callback";
+const SESSION_SECRET = process.env.SESSION_SECRET || 'sua-chave-secreta-muito-forte-e-diferente';
 
-app.set('trust proxy', true);
+app.set('trust proxy', true); 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser(SESSION_SECRET));
+
+app.use(express.static(BASE_DIR));
 
 const sessionMiddleware = session({
     store: new FileStore({ path: SESSION_FILES_DIR, logFn: function () { } }),
-    secret: 'sua-chave-secreta-muito-forte-e-diferente',
+    secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 * 7 }
+    saveUninitialized: true, 
+    cookie: { 
+        secure: false, 
+        maxAge: 1000 * 60 * 60 * 24 * 7 
+    }
 });
 
 app.use(sessionMiddleware);
@@ -46,12 +54,11 @@ app.use(passport.session());
 
 io.engine.use(sessionMiddleware);
 
-// --- INICIALIZAÇÃO DE ARQUIVOS ---
 if (!fs.existsSync(AUTH_SESSIONS_DIR)) fs.mkdirSync(AUTH_SESSIONS_DIR, { recursive: true });
 if (!fs.existsSync(SESSION_FILES_DIR)) fs.mkdirSync(SESSION_FILES_DIR, { recursive: true });
 
-const readDB = (path) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf-8')) : {};
-const writeDB = (path, data) => fs.writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
+const readDB = (filePath) => fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
+const writeDB = (filePath, data) => fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
 if (!fs.existsSync(SETTINGS_DB_PATH)) {
     writeDB(SETTINGS_DB_PATH, {
@@ -60,7 +67,6 @@ if (!fs.existsSync(SETTINGS_DB_PATH)) {
         priceResell5: "100.00", priceResell10: "180.00", priceResell20: "300.00", priceResell30: "400.00"
     });
 }
-if (!fs.existsSync(IPS_DB_PATH)) writeDB(IPS_DB_PATH, {});
 
 function addUserLog(username, message) {
     try {
@@ -79,35 +85,38 @@ function getClientIp(req) {
 
 let activeBots = {};
 
-// --- GOOGLE AUTH ---
 if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-    passport.use(new GoogleStrategy({ clientID: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, callbackURL: CALLBACK_URL, passReqToCallback: true },
+    passport.use(new GoogleStrategy({ 
+            clientID: GOOGLE_CLIENT_ID, 
+            clientSecret: GOOGLE_CLIENT_SECRET, 
+            callbackURL: CALLBACK_URL, 
+            passReqToCallback: true,
+            proxy: true
+        },
         async (req, accessToken, refreshToken, profile, done) => {
             try {
                 const users = readDB(USERS_DB_PATH);
-                const ips = readDB(IPS_DB_PATH);
                 const userIp = getClientIp(req);
                 const username = profile.emails[0].value;
 
-                if (users[username]) return done(null, users[username]);
-
-                if (ips[userIp]) {
-                    return done(null, false, { message: "Você já criou uma conta neste dispositivo/rede." });
+                if (users[username]) {
+                    return done(null, users[username]);
                 }
 
+                const deviceUsed = req.signedCookies['zapp_device_used'] === 'true';
                 const isAdmin = Object.keys(users).length === 0;
+                const trialUsed = (!isAdmin && deviceUsed) ? true : false;
+
                 const newUser = {
                     username, password: null, googleId: profile.id, displayName: profile.displayName,
-                    createdAt: new Date(), isAdmin, botLimit: isAdmin ? 999 : 1, log: [],
-                    trialUsed: false, trialExpiresAt: null
+                    createdAt: new Date(), isAdmin, botLimit: isAdmin ? 999999 : 1, log: [],
+                    trialUsed: trialUsed, 
+                    trialExpiresAt: null
                 };
 
                 users[username] = newUser;
-                ips[userIp] = username;
-
                 writeDB(USERS_DB_PATH, users);
-                writeDB(IPS_DB_PATH, ips);
-                addUserLog(username, `Conta Google criada. IP: ${userIp}`);
+                addUserLog(username, `Conta Google criada. IP: ${userIp} | DeviceUsed: ${deviceUsed}`);
                 return done(null, newUser);
             } catch (err) { return done(err, null); }
         }));
@@ -115,7 +124,6 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     passport.deserializeUser((username, done) => { const u = readDB(USERS_DB_PATH)[username]; done(u ? null : new Error("Not found"), u); });
 }
 
-// --- PAGAMENTO ---
 app.post('/api/create-payment', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: 'Não autorizado' });
     const settings = readDB(SETTINGS_DB_PATH);
@@ -171,7 +179,6 @@ app.post('/webhook/mercadopago', async (req, res) => {
                     const bots = readDB(BOTS_DB_PATH);
                     const bot = bots[ref1];
                     if (bot && users[bot.owner]) {
-                        const owner = users[bot.owner];
                         const now = new Date();
                         const currentExpire = new Date(bot.trialExpiresAt);
                         
@@ -194,44 +201,87 @@ app.post('/webhook/mercadopago', async (req, res) => {
                     }
                 }
             }
-        } catch (e) { /* Silencia erros de webhook */ }
+        } catch (e) { }
     }
     res.sendStatus(200);
 });
 
-// --- ROTAS PADRÃO ---
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(BASE_DIR, 'index.html'));
+});
 
 app.post('/register', async (req, res) => {
     let users = readDB(USERS_DB_PATH);
-    let ips = readDB(IPS_DB_PATH);
     const { username, password } = req.body;
-    const userIp = getClientIp(req);
+    
+    if (users[username]) return res.status(400).json({ message: "Este usuário já está cadastrado." });
 
-    if (users[username]) return res.status(400).json({ message: "Usuário já existe." });
-    if (ips[userIp]) return res.status(403).json({ message: "Limite de contas atingido para este IP." });
-
+    const deviceUsed = req.signedCookies['zapp_device_used'] === 'true';
     const isAdmin = Object.keys(users).length === 0;
+    const trialUsed = (!isAdmin && deviceUsed) ? true : false;
+
     users[username] = {
         username, password: await bcrypt.hash(password, 10), createdAt: new Date(), isAdmin,
-        botLimit: isAdmin ? 999 : 1, log: [], trialUsed: false, trialExpiresAt: null
+        botLimit: isAdmin ? 999999 : 1, log: [], 
+        trialUsed: trialUsed, 
+        trialExpiresAt: null
     };
 
-    if (!isAdmin) ips[userIp] = username;
-
     writeDB(USERS_DB_PATH, users);
-    writeDB(IPS_DB_PATH, ips);
+
+    res.cookie('zapp_device_used', 'true', { 
+        maxAge: 3650 * 24 * 60 * 60 * 1000, 
+        httpOnly: true, 
+        signed: true 
+    });
+
     res.status(201).json({ message: "OK" });
 });
 
 app.post('/login', async (req, res) => {
     const u = readDB(USERS_DB_PATH)[req.body.username];
-    if (!u || !await bcrypt.compare(req.body.password, u.password)) return res.status(401).json({ message: "Credenciais inválidas" });
-    req.session.user = { username: u.username, isAdmin: !!u.isAdmin }; res.status(200).json({ message: "OK" });
+    if (!u || !await bcrypt.compare(req.body.password, u.password)) {
+        return res.status(401).json({ message: "Usuário ou senha incorretos." });
+    }
+    req.session.user = { username: u.username, isAdmin: !!u.isAdmin }; 
+    res.status(200).json({ message: "OK" });
 });
 
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => { req.session.user = { username: req.user.username, isAdmin: !!req.user.isAdmin }; res.redirect('/'); });
+
+app.get('/auth/google/callback', (req, res, next) => {
+    // CORREÇÃO: Se já estiver logado, ignora o callback e vai pro home
+    if (req.isAuthenticated()) return res.redirect('/');
+
+    passport.authenticate('google', (err, user, info) => {
+        if (err) { 
+            console.error("Erro Google Auth:", err);
+            const msg = err.message || "Erro desconhecido";
+            return res.redirect(`/?error=${encodeURIComponent(msg)}`);
+        }
+        
+        if (!user) {
+            return res.redirect('/'); 
+        }
+
+        req.logIn(user, (err) => {
+            if (err) { 
+                console.error("Erro login session:", err);
+                return res.redirect(`/?error=${encodeURIComponent(err.message)}`);
+            }
+            
+            res.cookie('zapp_device_used', 'true', { 
+                maxAge: 3650 * 24 * 60 * 60 * 1000, 
+                httpOnly: true, 
+                signed: true 
+            });
+
+            req.session.user = { username: user.username, isAdmin: !!user.isAdmin };
+            return res.redirect('/');
+        });
+    })(req, res, next);
+});
+
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
 app.get('/check-session', (req, res) => {
     if (req.session.user) {
@@ -246,9 +296,10 @@ io.use((socket, next) => {
     else next(new Error('Auth error'));
 });
 
-// --- SOCKET ---
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
+    if (!user) { socket.disconnect(); return; }
+
     const uData = readDB(USERS_DB_PATH)[user.username];
     socket.emit('session-info', { username: user.username, isAdmin: user.isAdmin, botLimit: uData?.botLimit || 1 });
 
@@ -266,14 +317,14 @@ io.on('connection', (socket) => {
             const bot = bots[sessionName];
 
             if (bot) {
+                const d = parseInt(days);
                 const now = new Date();
-                let base = new Date(bot.trialExpiresAt);
-
-                if (isNaN(base) || base < now) base = now;
+                const newDate = new Date(now);
                 
-                base.setDate(base.getDate() + parseInt(days));
+                newDate.setDate(newDate.getDate() + d);
+                newDate.setMinutes(newDate.getMinutes() - 10);
 
-                bot.trialExpiresAt = base.toISOString();
+                bot.trialExpiresAt = newDate.toISOString();
                 bot.activated = true;
                 bot.isTrial = false;
 
@@ -283,19 +334,20 @@ io.on('connection', (socket) => {
         });
 
         socket.on('admin-get-users', () => socket.emit('admin-users-list', Object.values(readDB(USERS_DB_PATH)).map(({ password, ...r }) => r)));
+        
         socket.on('admin-delete-user', ({ username }) => {
             const users = readDB(USERS_DB_PATH);
-            const ips = readDB(IPS_DB_PATH);
-            for (let ip in ips) { if (ips[ip] === username) delete ips[ip]; }
             delete users[username];
             writeDB(USERS_DB_PATH, users);
-            writeDB(IPS_DB_PATH, ips);
             socket.emit('admin-users-list', Object.values(users).map(({ password, ...r }) => r));
         });
+        
         socket.on('admin-get-bots-for-user', ({ username }) => socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === username)));
     }
 
-    socket.on('get-my-bots', () => { if (!user.isAdmin) socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username)); });
+    socket.on('get-my-bots', () => { 
+        socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username)); 
+    });
 
     socket.on('create-bot', (d) => {
         const bots = readDB(BOTS_DB_PATH);
@@ -313,16 +365,17 @@ io.on('connection', (socket) => {
         let trialEndDate = new Date(now);
         let isTrial = false;
 
-        if (ownerData.isAdmin || !ownerData.trialUsed) {
+        if (ownerData.isAdmin) {
             trialEndDate.setHours(trialEndDate.getHours() + 24);
             isTrial = true;
-            if(!ownerData.isAdmin) {
-                 ownerData.trialUsed = true;
-                 users[owner] = ownerData;
-                 writeDB(USERS_DB_PATH, users);
-            }
+        } else if (!ownerData.trialUsed) {
+            trialEndDate.setHours(trialEndDate.getHours() + 24);
+            isTrial = true;
+            ownerData.trialUsed = true;
+            users[owner] = ownerData;
+            writeDB(USERS_DB_PATH, users);
         } else {
-            trialEndDate = new Date(0); // Expired
+            trialEndDate = new Date(0); 
         }
 
         const newBot = {
@@ -344,13 +397,13 @@ io.on('connection', (socket) => {
         const canStart = new Date(newBot.trialExpiresAt) > new Date();
         if (canStart) {
             startBotProcess(newBot);
-            socket.emit('feedback', { success: true, message: 'Robô criado e iniciando...' });
+            socket.emit('feedback', { success: true, message: 'Robô criado e iniciando (Teste Grátis)...' });
         } else {
-            socket.emit('feedback', { success: true, message: 'Robô criado, mas seu período de teste expirou. Renove para usar.' });
+            socket.emit('feedback', { success: true, message: 'Robô criado. Realize o pagamento para ativar.' });
         }
     });
 
-    socket.on('start-bot', ({ sessionName }) => {
+    socket.on('start-bot', ({ sessionName, phoneNumber }) => {
         const bots = readDB(BOTS_DB_PATH);
         const bot = bots[sessionName];
         if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
@@ -361,7 +414,7 @@ io.on('connection', (socket) => {
 
         if (activeBots[sessionName]) return socket.emit('feedback', { success: false, message: 'O robô já está rodando.' });
 
-        startBotProcess(bot);
+        startBotProcess(bot, phoneNumber);
         socket.emit('feedback', { success: true, message: 'Iniciando o robô...' });
     });
 
@@ -409,10 +462,16 @@ io.on('connection', (socket) => {
 });
 
 
-function startBotProcess(bot) {
+function startBotProcess(bot, phoneNumber = null) {
     const env = { ...process.env, API_KEYS_GEMINI: process.env.API_KEYS_GEMINI };
     const ignoredIdentifiersArg = JSON.stringify(bot.ignoredIdentifiers || []);
-    const p = spawn('node', ['index.js', bot.sessionName, bot.prompt, ignoredIdentifiersArg], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    
+    const args = [BOT_SCRIPT_PATH, bot.sessionName, bot.prompt, ignoredIdentifiersArg];
+    if (phoneNumber) {
+        args.push(phoneNumber);
+    }
+
+    const p = spawn('node', args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
     activeBots[bot.sessionName] = { process: p };
     updateBotStatus(bot.sessionName, 'Iniciando...');
@@ -422,11 +481,13 @@ function startBotProcess(bot) {
 
         if (msg.startsWith('QR_CODE:')) {
             updateBotStatus(bot.sessionName, 'Aguardando QR Code', msg.replace('QR_CODE:', ''));
+        } else if (msg.startsWith('PAIRING_CODE:')) {
+            updateBotStatus(bot.sessionName, 'Aguardando QR Code', msg); 
         } else if (msg.includes('ONLINE!')) {
             const bots = readDB(BOTS_DB_PATH);
             const currentBot = bots[bot.sessionName];
 
-            if (!currentBot.activated) {
+            if (currentBot && !currentBot.activated) {
                 currentBot.activated = true;
                 writeDB(BOTS_DB_PATH, bots);
                 io.emit('bot-updated', currentBot);
