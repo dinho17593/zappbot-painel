@@ -435,10 +435,32 @@ io.on('connection', (socket) => {
 
     socket.on('update-bot', (d) => {
         const bots = readDB(BOTS_DB_PATH);
-        if (bots[d.sessionName]) {
-            bots[d.sessionName].prompt = d.newPrompt;
+        const bot = bots[d.sessionName];
+        
+        if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
+
+        if (bot) {
+            bot.prompt = d.newPrompt;
             writeDB(BOTS_DB_PATH, bots);
-            io.emit('bot-updated', bots[d.sessionName]);
+            io.emit('bot-updated', bot);
+
+            if (activeBots[d.sessionName]) {
+                try {
+                    activeBots[d.sessionName].process.kill('SIGINT');
+                } catch (e) { 
+                    console.error(`Erro ao parar ${d.sessionName} para update:`, e);
+                }
+                
+                delete activeBots[d.sessionName];
+                
+                socket.emit('feedback', { success: true, message: 'Prompt salvo. Reiniciando o robô...' });
+
+                setTimeout(() => {
+                    startBotProcess(bot);
+                }, 1000);
+            } else {
+                socket.emit('feedback', { success: true, message: 'Prompt salvo com sucesso.' });
+            }
         }
     });
 
