@@ -17,6 +17,10 @@ const phoneNumberArg = process.argv[5];
 
 const modeloGemini = 'gemini-flash-latest';
 
+// --- CONFIGURAÇÃO DO TIMER DE PAUSA (5 MINUTOS) ---
+const TEMPO_PAUSA_MS = 5 * 60 * 1000; 
+const pausados = {}; // Armazena quem está em pausa: { 'jid': timestamp_fim }
+
 if (!nomeSessao || !promptSistema) {
     console.error('❌ Uso correto: node index.js "nome-sessao" "Você é um vendedor..." \'[{"type":"name","value":"Joao"}]\' [numero-telefone]');
     process.exit(1);
@@ -183,10 +187,30 @@ async function ligarBot() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        
+        // Verifica se a mensagem existe
+        if (!msg.message) return;
+        
+        // Ignora atualizações de status
         if (msg.key.remoteJid === 'status@broadcast') return;
 
         const jid = msg.key.remoteJid;
+
+        // --- LÓGICA DE INTERVENÇÃO HUMANA (PAUSA) ---
+        if (msg.key.fromMe) {
+            // Se VOCÊ mandou mensagem, pausa o bot para este contato
+            console.log(`[${nomeSessao}] 🛑 Intervenção humana detectada. Pausando ${jid} por 5 min.`);
+            pausados[jid] = Date.now() + TEMPO_PAUSA_MS;
+            return;
+        }
+
+        // Verifica se o bot está pausado para este contato
+        if (pausados[jid] && Date.now() < pausados[jid]) {
+            console.log(`[${nomeSessao}] ⏸️ Bot em pausa para ${jid} (Intervenção Humana).`);
+            return;
+        }
+        // ---------------------------------------------
+
         const pushName = msg.pushName || '';
         const senderNumber = jid.split('@')[0];
 
@@ -206,7 +230,7 @@ async function ligarBot() {
         }
 
         if (isIgnored) {
-            console.log(`[${nomeSessao}] Mensagem de ${pushName || senderNumber} ignorada.`);
+            console.log(`[${nomeSessao}] Mensagem de ${pushName || senderNumber} ignorada (Lista Negra).`);
             return;
         }
 
