@@ -60,22 +60,19 @@ if (!fs.existsSync(SESSION_FILES_DIR)) fs.mkdirSync(SESSION_FILES_DIR, { recursi
 const readDB = (filePath) => fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
 const writeDB = (filePath, data) => fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
-// --- CORREÇÃO: GARANTIR QUE O PRIMEIRO USUÁRIO SEJA SEMPRE ADMIN ---
+// --- GARANTIR QUE O PRIMEIRO USUÁRIO SEJA SEMPRE ADMIN ---
 function ensureFirstUserIsAdmin() {
     try {
         const users = readDB(USERS_DB_PATH);
         const userKeys = Object.keys(users);
         
         if (userKeys.length > 0) {
-            // Verifica se existe algum admin
             const hasAdmin = userKeys.some(key => users[key].isAdmin === true);
-            
-            // Se não tem admin, promove o primeiro usuário criado
             if (!hasAdmin) {
-                const firstUser = userKeys[0]; // Pega o primeiro da lista
+                const firstUser = userKeys[0];
                 console.log(`[SISTEMA] Nenhum admin encontrado. Promovendo o primeiro usuário (${firstUser}) a Admin.`);
                 users[firstUser].isAdmin = true;
-                users[firstUser].botLimit = 999999; // Ilimitado para admin
+                users[firstUser].botLimit = 999999;
                 writeDB(USERS_DB_PATH, users);
             }
         }
@@ -83,8 +80,6 @@ function ensureFirstUserIsAdmin() {
         console.error("Erro ao verificar admins:", e);
     }
 }
-
-// Executa a verificação ao iniciar
 ensureFirstUserIsAdmin();
 
 if (!fs.existsSync(SETTINGS_DB_PATH)) {
@@ -124,16 +119,13 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             try {
                 const users = readDB(USERS_DB_PATH);
                 const userIp = getClientIp(req);
-                // CORREÇÃO: Normalizar email para minúsculo
                 const username = profile.emails[0].value.toLowerCase();
 
                 if (users[username]) {
-                    // Usuário já existe, retorna ele sem alterar isAdmin
                     return done(null, users[username]);
                 }
 
                 const deviceUsed = req.signedCookies['zapp_device_used'] === 'true';
-                // Se for o primeiro usuário do sistema, vira Admin
                 const isAdmin = Object.keys(users).length === 0;
                 const trialUsed = (!isAdmin && deviceUsed) ? true : false;
 
@@ -160,7 +152,6 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     passport.serializeUser((user, done) => done(null, user.username));
     
     passport.deserializeUser((username, done) => { 
-        // CORREÇÃO: Busca robusta
         const u = readDB(USERS_DB_PATH)[username.toLowerCase()]; 
         done(u ? null : new Error("Not found"), u); 
     });
@@ -254,7 +245,6 @@ app.get('/', (req, res) => {
 
 app.post('/register', async (req, res) => {
     let users = readDB(USERS_DB_PATH);
-    // CORREÇÃO: Normalizar para minúsculo
     const username = req.body.username.toLowerCase().trim();
     const password = req.body.password;
     
@@ -283,7 +273,6 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-    // CORREÇÃO: Normalizar para minúsculo
     const username = req.body.username.toLowerCase().trim();
     const u = readDB(USERS_DB_PATH)[username];
     
@@ -332,14 +321,11 @@ app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
 
 app.get('/check-session', (req, res) => {
     if (req.session.user) {
-        // CORREÇÃO: Ler do banco para garantir status atualizado
         const u = readDB(USERS_DB_PATH)[req.session.user.username.toLowerCase()];
         if (u) {
-            // Atualiza a sessão com o status real do banco
             req.session.user.isAdmin = u.isAdmin;
             res.json({ loggedIn: true, user: { ...req.session.user, botLimit: u.botLimit || 1 } });
         } else {
-            // Usuário na sessão mas não no banco? Logout.
             req.session.destroy();
             res.status(401).json({ loggedIn: false });
         }
@@ -350,12 +336,10 @@ io.use((socket, next) => {
     const sessionUser = socket.request.session.user || (socket.request.session.passport?.user);
     
     if (sessionUser) {
-        // Passport as vezes salva apenas o username string na sessão
         const username = (typeof sessionUser === 'object' ? sessionUser.username : sessionUser).toLowerCase();
         const dbUser = readDB(USERS_DB_PATH)[username];
         
         if (dbUser) {
-            // Reconstrói o objeto user da sessão com dados frescos do DB
             socket.request.session.user = { 
                 username: dbUser.username, 
                 isAdmin: dbUser.isAdmin 
@@ -609,4 +593,31 @@ function updateBotStatus(name, status, qr = null) {
     }
 }
 
-server.listen(3000, () => console.log('Painel ON: http://localhost:3000'));
+// --- CORREÇÃO: REINICIAR BOTS ATIVOS AO LIGAR O SERVIDOR ---
+function restartActiveBots() {
+    const bots = readDB(BOTS_DB_PATH);
+    console.log('[SISTEMA] Verificando bots para reiniciar...');
+    
+    Object.values(bots).forEach(bot => {
+        // Se o bot estava Online, Iniciando ou Aguardando QR, tentamos reiniciar
+        if (bot.status === 'Online' || bot.status.includes('Iniciando') || bot.status.includes('Aguardando')) {
+            const now = new Date();
+            const expires = new Date(bot.trialExpiresAt);
+            
+            if (expires > now) {
+                console.log(`[RESTART] Reiniciando bot: ${bot.sessionName}`);
+                startBotProcess(bot);
+            } else {
+                console.log(`[RESTART] Bot ${bot.sessionName} expirou, não será reiniciado.`);
+                bot.status = 'Offline';
+            }
+        }
+    });
+    // Atualiza o DB caso algum bot tenha sido marcado como Offline por expiração
+    writeDB(BOTS_DB_PATH, bots);
+}
+
+server.listen(3000, () => {
+    console.log('Painel ON: http://localhost:3000');
+    restartActiveBots(); // Chama a função ao iniciar
+});
