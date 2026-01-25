@@ -60,6 +60,33 @@ if (!fs.existsSync(SESSION_FILES_DIR)) fs.mkdirSync(SESSION_FILES_DIR, { recursi
 const readDB = (filePath) => fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
 const writeDB = (filePath, data) => fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
+// --- CORREÇÃO: GARANTIR QUE O PRIMEIRO USUÁRIO SEJA SEMPRE ADMIN ---
+function ensureFirstUserIsAdmin() {
+    try {
+        const users = readDB(USERS_DB_PATH);
+        const userKeys = Object.keys(users);
+        
+        if (userKeys.length > 0) {
+            // Verifica se existe algum admin
+            const hasAdmin = userKeys.some(key => users[key].isAdmin === true);
+            
+            // Se não tem admin, promove o primeiro usuário criado
+            if (!hasAdmin) {
+                const firstUser = userKeys[0]; // Pega o primeiro da lista
+                console.log(`[SISTEMA] Nenhum admin encontrado. Promovendo o primeiro usuário (${firstUser}) a Admin.`);
+                users[firstUser].isAdmin = true;
+                users[firstUser].botLimit = 999999; // Ilimitado para admin
+                writeDB(USERS_DB_PATH, users);
+            }
+        }
+    } catch (e) {
+        console.error("Erro ao verificar admins:", e);
+    }
+}
+
+// Executa a verificação ao iniciar
+ensureFirstUserIsAdmin();
+
 if (!fs.existsSync(SETTINGS_DB_PATH)) {
     writeDB(SETTINGS_DB_PATH, {
         mpAccessToken: "", priceMonthly: "29.90", priceQuarterly: "79.90",
@@ -97,19 +124,28 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             try {
                 const users = readDB(USERS_DB_PATH);
                 const userIp = getClientIp(req);
-                const username = profile.emails[0].value;
+                // CORREÇÃO: Normalizar email para minúsculo
+                const username = profile.emails[0].value.toLowerCase();
 
                 if (users[username]) {
+                    // Usuário já existe, retorna ele sem alterar isAdmin
                     return done(null, users[username]);
                 }
 
                 const deviceUsed = req.signedCookies['zapp_device_used'] === 'true';
+                // Se for o primeiro usuário do sistema, vira Admin
                 const isAdmin = Object.keys(users).length === 0;
                 const trialUsed = (!isAdmin && deviceUsed) ? true : false;
 
                 const newUser = {
-                    username, password: null, googleId: profile.id, displayName: profile.displayName,
-                    createdAt: new Date(), isAdmin, botLimit: isAdmin ? 999999 : 1, log: [],
+                    username, 
+                    password: null, 
+                    googleId: profile.id, 
+                    displayName: profile.displayName,
+                    createdAt: new Date(), 
+                    isAdmin, 
+                    botLimit: isAdmin ? 999999 : 1, 
+                    log: [],
                     trialUsed: trialUsed, 
                     trialExpiresAt: null
                 };
@@ -120,8 +156,14 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
                 return done(null, newUser);
             } catch (err) { return done(err, null); }
         }));
+    
     passport.serializeUser((user, done) => done(null, user.username));
-    passport.deserializeUser((username, done) => { const u = readDB(USERS_DB_PATH)[username]; done(u ? null : new Error("Not found"), u); });
+    
+    passport.deserializeUser((username, done) => { 
+        // CORREÇÃO: Busca robusta
+        const u = readDB(USERS_DB_PATH)[username.toLowerCase()]; 
+        done(u ? null : new Error("Not found"), u); 
+    });
 }
 
 app.post('/api/create-payment', async (req, res) => {
@@ -212,7 +254,9 @@ app.get('/', (req, res) => {
 
 app.post('/register', async (req, res) => {
     let users = readDB(USERS_DB_PATH);
-    const { username, password } = req.body;
+    // CORREÇÃO: Normalizar para minúsculo
+    const username = req.body.username.toLowerCase().trim();
+    const password = req.body.password;
     
     if (users[username]) return res.status(400).json({ message: "Este usuário já está cadastrado." });
 
@@ -239,8 +283,11 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-    const u = readDB(USERS_DB_PATH)[req.body.username];
-    if (!u || !await bcrypt.compare(req.body.password, u.password)) {
+    // CORREÇÃO: Normalizar para minúsculo
+    const username = req.body.username.toLowerCase().trim();
+    const u = readDB(USERS_DB_PATH)[username];
+    
+    if (!u || !u.password || !await bcrypt.compare(req.body.password, u.password)) {
         return res.status(401).json({ message: "Usuário ou senha incorretos." });
     }
     req.session.user = { username: u.username, isAdmin: !!u.isAdmin }; 
@@ -250,7 +297,6 @@ app.post('/login', async (req, res) => {
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback', (req, res, next) => {
-    // CORREÇÃO: Se já estiver logado, ignora o callback e vai pro home
     if (req.isAuthenticated()) return res.redirect('/');
 
     passport.authenticate('google', (err, user, info) => {
@@ -283,17 +329,44 @@ app.get('/auth/google/callback', (req, res, next) => {
 });
 
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
+
 app.get('/check-session', (req, res) => {
     if (req.session.user) {
-        const u = readDB(USERS_DB_PATH)[req.session.user.username];
-        res.json({ loggedIn: true, user: { ...req.session.user, botLimit: u ? (u.botLimit || 1) : 1 } });
+        // CORREÇÃO: Ler do banco para garantir status atualizado
+        const u = readDB(USERS_DB_PATH)[req.session.user.username.toLowerCase()];
+        if (u) {
+            // Atualiza a sessão com o status real do banco
+            req.session.user.isAdmin = u.isAdmin;
+            res.json({ loggedIn: true, user: { ...req.session.user, botLimit: u.botLimit || 1 } });
+        } else {
+            // Usuário na sessão mas não no banco? Logout.
+            req.session.destroy();
+            res.status(401).json({ loggedIn: false });
+        }
     } else res.status(401).json({ loggedIn: false });
 });
 
 io.use((socket, next) => {
-    const u = socket.request.session.user || (socket.request.session.passport?.user);
-    if (u) { socket.request.session.user = { username: u.username || u, isAdmin: readDB(USERS_DB_PATH)[u.username || u]?.isAdmin }; next(); }
-    else next(new Error('Auth error'));
+    const sessionUser = socket.request.session.user || (socket.request.session.passport?.user);
+    
+    if (sessionUser) {
+        // Passport as vezes salva apenas o username string na sessão
+        const username = (typeof sessionUser === 'object' ? sessionUser.username : sessionUser).toLowerCase();
+        const dbUser = readDB(USERS_DB_PATH)[username];
+        
+        if (dbUser) {
+            // Reconstrói o objeto user da sessão com dados frescos do DB
+            socket.request.session.user = { 
+                username: dbUser.username, 
+                isAdmin: dbUser.isAdmin 
+            };
+            next();
+        } else {
+            next(new Error('User not found in DB'));
+        }
+    } else {
+        next(new Error('Auth error'));
+    }
 });
 
 io.on('connection', (socket) => {
