@@ -1,9 +1,23 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Painel ZappBot</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <meta name="theme-color" content="#121214">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ZappBot">
+    
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="shortcut icon" href="icon-192.png" type="image/x-icon">
+    <link rel="manifest" href="/manifest.json">
+
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -15,20 +29,54 @@
             --text-main: #e1e1e6;
             --text-muted: #a8a8b3;
             --border: #323238;
-            --primary: #8257e5;
-            --primary-hover: #9466ff;
+            
+            --primary: #808085;       
+            --primary-hover: #98989d; 
+            --purple-dark: #45454a;   
+            
             --green: #04d361;
             --red: #f75a68;
             --blue: #3294F8;
             --yellow: #FBA94C;
             --cyan: #61dafb;
-            --purple-dark: #4c1d95;
             --header-height: 60px;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); margin: 0; padding-bottom: 80px; }
         
+        /* Estilo da Barra de Atualização PWA */
+        #pwa-update-bar {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            z-index: 9999;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            align-items: center;
+            gap: 15px;
+            font-weight: 600;
+            width: 90%;
+            max-width: 400px;
+            justify-content: space-between;
+        }
+        #pwa-update-bar.show { display: flex; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        #pwa-update-btn {
+            background: white;
+            color: var(--primary);
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
         .container { max-width: 1200px; margin: 0 auto; padding: 15px; }
         .hidden { display: none !important; }
         .text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -41,9 +89,26 @@
 
         header { position: sticky; top: 0; z-index: 100; background: rgba(32, 32, 36, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         .nav-bar { height: var(--header-height); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; position: relative; }
-        .nav-btn { background: transparent; border: none; color: var(--text-main); font-size: 1.2rem; padding: 10px; cursor: pointer; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+        
+        .nav-btn { 
+            background: transparent; 
+            border: none; 
+            color: var(--text-main); 
+            font-size: 1.2rem; 
+            padding: 10px; 
+            cursor: pointer; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            transition: background 0.2s; 
+            text-decoration: none; 
+        }
         .nav-btn:active { background: rgba(255,255,255,0.1); }
         .nav-btn.logout { color: var(--red); }
+        
         .brand-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .brand-center i { color: var(--primary); }
         .user-strip { background: #18181b; border-bottom: 1px solid var(--border); padding: 8px 15px; text-align: center; font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: center; align-items: center; gap: 8px; }
@@ -53,8 +118,23 @@
         input:focus, textarea:focus { border-color: var(--primary); }
         button { cursor: pointer; font-family: 'Inter', sans-serif; border: none; }
         
-        .btn-primary { background: var(--primary); color: white; padding: 16px; border-radius: 8px; font-weight: 600; width: 100%; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(130, 87, 229, 0.3); transition: 0.2s; }
+        .btn-primary { 
+            background: var(--primary); 
+            color: white; 
+            padding: 16px; 
+            border-radius: 8px; 
+            font-weight: 600; 
+            width: 100%; 
+            font-size: 1rem; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 8px; 
+            box-shadow: 0 4px 15px rgba(128, 128, 133, 0.3); 
+            transition: 0.2s; 
+        }
         .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled { background: #444; color: #888; cursor: not-allowed; box-shadow: none; }
 
         .btn-google { background: white; color: #333; width: 100%; padding: 12px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; transition: background 0.2s; border: 1px solid #ddd; }
         .btn-google:hover { background: #f0f0f0; }
@@ -82,17 +162,60 @@
         .progress-bar-bg { height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
         .progress-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.5s ease; box-shadow: 0 0 10px var(--primary); }
         
-        /* NOVO: Estilos para as datas */
         .date-info { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); padding: 2px 0; }
         .date-info strong { color: var(--text-main); font-weight: 500; }
 
         .logs-container { background: #0d0d0d; border-radius: 8px; border: 1px solid #333; padding: 10px; font-family: 'Courier New', monospace; font-size: 0.7rem; color: #00ff00; height: 120px; overflow-y: auto; display: flex; flex-direction: column; }
         .log-line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
-        .qr-area { background:#fff; padding:15px; border-radius:8px; align-self:center; display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .qr-area { background:#fff; padding:15px; border-radius:8px; align-self:center; display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; }
         .qr-instructions { color: #333; margin-bottom: 10px; font-size: 0.8rem; text-align: left; width: 100%; }
         .qr-instructions ol { padding-left: 20px; margin: 5px 0; }
         .qr-instructions li { margin-bottom: 4px; }
+        
+        .btn-share-qr {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn-share-qr:active { transform: scale(0.98); background: var(--primary-hover); }
+
+        .btn-use-code {
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 8px 15px;
+            border-radius: 8px;
+            margin-top: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            width: 100%;
+            font-weight: 600;
+        }
+
+        .pairing-code-display {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #333;
+            letter-spacing: 2px;
+            margin: 15px 0;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px dashed #ccc;
+        }
 
         .action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
         .icon-btn { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px 5px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 5px; transition: 0.2s; border: 1px solid transparent; text-decoration: none; }
@@ -116,7 +239,22 @@
         .plan-price { font-weight: 700; color: var(--green); font-size: 1.1rem; }
         .plan-badge-resell { background: var(--purple-dark); color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
 
-        #feedback-area { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 200; padding: 10px 20px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; box-shadow: 0 5px 20px rgba(0,0,0,0.5); display: none; width: 90%; max-width: 300px; text-align: center; }
+        #feedback-area { 
+            position: fixed; 
+            top: 20px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            z-index: 10000; 
+            padding: 12px 25px; 
+            border-radius: 30px; 
+            font-size: 0.95rem; 
+            font-weight: 600; 
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5); 
+            display: none; 
+            width: 90%; 
+            max-width: 320px; 
+            text-align: center; 
+        }
         .feedback-success { background: var(--green); color: #000; }
         .feedback-error { background: var(--red); color: #fff; }
 
@@ -128,7 +266,20 @@
         .counter-btn:hover { background: rgba(255,255,255,0.1); }
         .days-input { width: 50px !important; text-align: center; border: none !important; margin: 0 !important; padding: 5px !important; background: transparent !important; font-weight: bold; -moz-appearance: textfield; }
         .days-input::-webkit-outer-spin-button, .days-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .btn-save-days { background: var(--primary); color: white; border: none; border-radius: 6px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 10px rgba(130, 87, 229, 0.2); }
+        
+        .btn-save-days { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            width: 36px; 
+            height: 36px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            box-shadow: 0 2px 10px rgba(128, 128, 133, 0.2); 
+        }
    
         .list-container {
             max-height: 200px; overflow-y: auto; background: var(--bg-input);
@@ -140,11 +291,126 @@
             font-size: 0.9rem; margin-bottom: 5px; font-weight: 600;
         }
         .ignored-item .fas.fa-times { color: var(--red); cursor: pointer; padding: 5px; }
+
+        .payment-success-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            text-align: center;
+        }
+
+        .qr-wrapper {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: fit-content;
+        }
+
+        .amount-display {
+            font-size: 2.2rem;
+            color: #fff;
+            font-weight: 800;
+            margin: 10px 0 5px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .copy-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .input-copy {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            text-align: center;
+            width: 100%;
+            margin: 0 !important;
+        }
+
+        .btn-copy {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-share-pix {
+            background: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .btn-share-pix:active { background: #eee; transform: scale(0.98); }
+
+        .btn-support {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 60px;
+            height: 60px;
+            background-color: #25D366; 
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            z-index: 10001;
+            transition: all 0.3s ease;
+            text-decoration: none; 
+        }
+        .btn-support:hover {
+            transform: scale(1.1);
+            background-color: #128C7E;
+        }
+        .btn-support:active {
+            transform: scale(0.9);
+        }
     </style>
 </head>
 <body>
 
-    <!-- AUTHENTICATION (Sem alterações) -->
+    <!-- BARRA DE ATUALIZAÇÃO PWA -->
+    <div id="pwa-update-bar">
+        <span>Nova versão disponível!</span>
+        <button id="pwa-update-btn">ATUALIZAR AGORA</button>
+    </div>
+
+    <!-- FEEDBACK (TOAST) -->
+    <div id="feedback-area"></div>
+
+    <!-- AUTHENTICATION -->
     <div id="auth-section" class="auth-wrapper">
         <div class="auth-card">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -156,7 +422,7 @@
                 <form id="login-form">
                     <div class="input-group" style="margin-bottom:15px;"><label class="input-label">Seu Email ou Usuário</label><input type="text" id="login-username" required></div>
                     <div class="input-group" style="margin-bottom:20px;"><label class="input-label">Sua Senha</label><input type="password" id="login-password" required></div>
-                    <button type="submit" class="btn-primary">Entrar no Painel</button>
+                    <button type="submit" id="btn-login-submit" class="btn-primary">Entrar no Painel</button>
                 </form>
                 <div class="auth-divider"><span>ou continue com</span></div>
                 <a href="/auth/google" class="btn-google"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg> Google</a>
@@ -166,7 +432,7 @@
                 <form id="register-form">
                     <div class="input-group" style="margin-bottom:15px;"><label class="input-label">Crie um Usuário</label><input type="text" id="register-username" required></div>
                     <div class="input-group" style="margin-bottom:20px;"><label class="input-label">Crie uma Senha</label><input type="password" id="register-password" required></div>
-                    <button type="submit" class="btn-primary">Criar Conta Grátis</button>
+                    <button type="submit" id="btn-register-submit" class="btn-primary">Criar Conta Grátis</button>
                 </form>
                 <div class="auth-divider"><span>ou cadastre com</span></div>
                 <a href="/auth/google" class="btn-google"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg> Google</a>
@@ -175,24 +441,34 @@
         </div>
     </div>
 
-    <!-- MAIN DASHBOARD (Sem alterações até os Modais) -->
+    <!-- MAIN DASHBOARD -->
     <div id="dashboard-container" class="hidden">
         <header>
             <div class="nav-bar">
                 <button id="nav-back-btn" class="nav-btn hidden" onclick="goBackToAdminHome()"><i class="fas fa-chevron-left"></i></button>
                 <div id="nav-placeholder" class="nav-btn" style="visibility: hidden; width: 40px;"></div>
                 <div class="brand-center"><i class="fas fa-robot"></i> ZappBot</div>
-                <a href="/logout" class="nav-btn logout" title="Sair"><i class="fas fa-power-off"></i></a>
+                <a href="#" class="nav-btn logout" title="Sair" onclick="confirmLogout()"><i class="fas fa-sign-out-alt"></i></a>
             </div>
             <div class="user-strip">
                 <i class="fas fa-user-circle"></i> Olá, <strong id="user-display-name" class="text-truncate">...</strong>
                 <div id="user-limit-badge" class="limit-badge" onclick="openResellModal()" title="Clique para aumentar seu limite">Limite: <span id="current-limit-display">1</span> <i class="fas fa-plus-circle" style="font-size:0.6rem;"></i></div>
             </div>
         </header>
-        <div id="feedback-area"></div>
         <div class="container">
+            <!-- PAINEL DE ADMINISTRAÇÃO -->
             <div id="admin-panel" class="hidden">
-                <h3 style="margin-top: 10px;">Painel de Controle (Admin)</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                    <h3 style="margin:0;">Painel de Controle (Admin)</h3>
+                </div>
+                
+                <div class="form-section" style="border-color: var(--primary); background: rgba(128, 128, 133, 0.1); margin-top: 20px;">
+                     <button onclick="goToMyBotsAdmin()" class="btn-primary" style="background: var(--primary); color: white;">
+                        <i class="fas fa-robot"></i> 🤖 Gerenciar Meus Bots (Admin)
+                    </button>
+                    <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 10px;">Acesse sua área pessoal de criação de robôs ilimitados.</p>
+                </div>
+
                 <div class="form-section" style="border-color: var(--cyan);">
                     <h4 style="color: var(--cyan); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
                     <form id="admin-settings-form">
@@ -216,12 +492,13 @@
                 </div>
                 <div class="form-section">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">Gerenciar Usuários</h4>
-                        <button onclick="document.getElementById('modal-create-user').style.display='flex'" class="btn-primary" style="width:auto; padding:8px 15px; font-size:0.8rem;"><i class="fas fa-user-plus"></i> Novo</button>
+                        <h4 style="margin: 0;">Usuários Cadastrados</h4>
                     </div>
                     <ul id="users-list" style="list-style: none; padding: 0;"></ul>
                 </div>
             </div>
+
+            <!-- VIEW DO USUÁRIO -->
             <div id="user-view">
                 <div id="view-header" style="margin: 15px 0;">
                     <h2 id="main-title-text" style="font-size: 1.2rem; margin: 0;">Meus Robôs</h2>
@@ -277,76 +554,174 @@
 
             <div class="section-divider-title" style="margin-top: 30px;">Atualmente Ignorados</div>
             <div id="ignored-list-container" class="list-container">
-                <!-- Itens ignorados serão injetados aqui -->
             </div>
         </div>
     </div>
 
-    <!-- Modal Pay (Sem alterações) -->
+    <!-- Modal Pairing Code -->
+    <div id="pairing-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin-top:0;">Conectar com Número</h3>
+                <i class="fas fa-times" onclick="document.getElementById('pairing-modal').style.display='none'" style="padding:10px; cursor:pointer;"></i>
+            </div>
+            <p class="help-text" style="margin-top:-10px; margin-bottom:15px;">Digite o número do WhatsApp que será o robô (com DDD). Ex: 5511999999999</p>
+            
+            <input type="hidden" id="pairing-sessionName-hidden">
+            
+            <form id="pairing-form">
+                <div class="input-group">
+                    <input type="number" id="pairing-phone-number" required placeholder="5511999999999" style="text-align:center; font-size:1.2rem; letter-spacing:1px;">
+                </div>
+                <button type="submit" class="btn-primary">Gerar Código</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Pay -->
     <div id="payment-modal" class="modal-overlay">
         <div class="modal-content text-center">
             <i class="fas fa-times" onclick="closePaymentModal()" style="position:absolute; right:20px; top:20px; padding:10px; cursor:pointer;"></i>
             <h3 style="color: var(--cyan);">Renovar Acesso</h3>
             <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 20px;">Robô: <strong id="pay-session-name" style="color: white;"></strong></p>
-            <div id="pay-step-select"><p style="color:#e1e1e6; margin-bottom:15px; font-weight:600;">Por quanto tempo deseja renovar?</p><div id="plans-container"></div></div>
-            <div id="pix-loading" class="hidden"><i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--cyan);"></i><p style="margin-top: 15px;">Gerando código Pix...</p></div>
-            <div id="pix-content" class="hidden">
-                <h2 id="pay-amount" style="color: #fff;">R$ --</h2>
-                <div style="background: #fff; padding: 10px; display: inline-block; border-radius: 8px; margin: 10px 0;"><img id="pix-qrcode-display" src="" style="width: 180px; display: block;"></div>
-                <div style="display: flex; gap: 8px; margin-top: 10px;"><input type="text" id="pix-copy-paste" readonly style="font-size: 0.8rem; margin: 0;"><button onclick="copyPixCode('pix-copy-paste')" style="background: var(--cyan); border-radius: 8px; padding: 0 15px; font-weight: bold; cursor:pointer;">Copiar</button></div>
+            
+            <div id="pay-step-select">
+                <p style="color:#e1e1e6; margin-bottom:15px; font-weight:600;">Por quanto tempo deseja renovar?</p>
+                <div id="plans-container"></div>
+            </div>
+
+            <div id="pix-loading" class="hidden payment-success-container" style="padding: 40px 0;">
+                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--cyan);"></i>
+                <p style="margin-top: 15px;">Gerando código Pix...</p>
+            </div>
+
+            <div id="pix-content" class="hidden payment-success-container">
+                <h2 id="pay-amount" class="amount-display">R$ --</h2>
+                
+                <div class="qr-wrapper">
+                    <img id="pix-qrcode-display" src="" style="width: 180px; display: block;">
+                </div>
+
+                <div class="copy-row">
+                    <input type="text" id="pix-copy-paste" readonly class="input-copy">
+                    <button onclick="copyPixCode('pix-copy-paste')" class="btn-copy" style="background: var(--cyan);">Copiar</button>
+                </div>
+
+                <button onclick="sharePixPayment('individual')" class="btn-share-pix">
+                    <i class="fas fa-share-alt"></i> Compartilhar Pagamento
+                </button>
+
                 <p style="color: var(--green); font-size: 0.8rem; margin-top: 15px;"><i class="fas fa-check-circle"></i> Liberação Automática após pagamento</p>
                 <button onclick="resetPaymentModal()" style="background:transparent; color:#888; border:1px solid #333; padding:8px 20px; border-radius:20px; margin-top:10px; font-size:0.8rem;">Voltar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal REVENDA (Sem alterações) -->
+    <!-- Modal REVENDA -->
     <div id="resell-modal" class="modal-overlay">
         <div class="modal-content text-center">
             <i class="fas fa-times" onclick="document.getElementById('resell-modal').style.display='none'" style="position:absolute; right:20px; top:20px; padding:10px; cursor:pointer;"></i>
             <h3 style="color: var(--primary);">Aumente seu Limite!</h3>
             <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 20px;">Limite atual: <strong><span id="current-limit-display-modal">1</span></strong> robô(s).</p>
-            <div id="resell-step-select"><div id="resell-plans-container"></div></div>
-            <div id="resell-pix-loading" class="hidden"><i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--primary);"></i><p style="margin-top: 10px;">Gerando Pix...</p></div>
-            <div id="resell-pix-content" class="hidden">
-                <h2 id="resell-pay-amount" style="color: #fff;">R$ --</h2>
-                <div style="background: #fff; padding: 10px; display: inline-block; border-radius: 8px; margin: 10px 0;"><img id="resell-qrcode-display" src="" style="width: 180px; display: block;"></div>
-                <div style="display: flex; gap: 8px; margin-top: 10px;"><input type="text" id="resell-copy-paste" readonly style="font-size: 0.8rem; margin: 0;"><button onclick="copyPixCode('resell-copy-paste')" style="background: var(--primary); color:white; border-radius: 8px; padding: 0 15px; font-weight: bold; cursor:pointer;">Copiar</button></div>
+            
+            <div id="resell-step-select">
+                <div id="resell-plans-container"></div>
+            </div>
+            
+            <div id="resell-pix-loading" class="hidden payment-success-container" style="padding: 40px 0;">
+                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--primary);"></i>
+                <p style="margin-top: 10px;">Gerando Pix...</p>
+            </div>
+
+            <div id="resell-pix-content" class="hidden payment-success-container">
+                <h2 id="resell-pay-amount" class="amount-display">R$ --</h2>
+                
+                <div class="qr-wrapper">
+                    <img id="resell-qrcode-display" src="" style="width: 180px; display: block;">
+                </div>
+
+                <div class="copy-row">
+                    <input type="text" id="resell-copy-paste" readonly class="input-copy">
+                    <button onclick="copyPixCode('resell-copy-paste')" class="btn-copy">Copiar</button>
+                </div>
+
+                <button onclick="sharePixPayment('resell')" class="btn-share-pix">
+                    <i class="fas fa-share-alt"></i> Compartilhar Pagamento
+                </button>
+
                 <p style="color: var(--green); font-size: 0.8rem; margin-top: 15px;">Limite atualizado automaticamente!</p>
             </div>
         </div>
     </div>
 
-    <!-- Modal Create User (Sem alterações) -->
-    <div id="modal-create-user" class="modal-overlay">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Criar Novo Usuário</h3>
-            <form id="admin-create-user-form">
-                <div class="input-group"><label class="input-label">Email ou Nome de Usuário</label><input type="text" id="admin-new-username" required></div>
-                <div class="input-group"><label class="input-label">Senha Inicial</label><input type="password" id="admin-new-password" required></div>
-                <button type="submit" class="btn-primary">Criar Usuário</button>
-                <button type="button" onclick="document.getElementById('modal-create-user').style.display='none'" style="width:100%; background:transparent; color: #888; margin-top:10px; padding:10px;">Cancelar</button>
-            </form>
-        </div>
-    </div>
-
+    <!-- BOTÃO DE SUPORTE -->
+    <a href="https://wa.me/5511956087683" target="_blank" class="btn-support" title="Falar com Suporte">
+        <i class="fab fa-whatsapp"></i>
+    </a>
 
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script>
-        // --- LOGIC (sem alterações) ---
-        const authSection = document.getElementById('auth-section');
-        const dashboardContainer = document.getElementById('dashboard-container');
-        const feedbackArea = document.getElementById('feedback-area');
-        
+        let socket;
+        let currentUser = {}; 
+        let botsData = {}; 
+        let viewedUser = null;
+        let publicPrices = {};
+
         document.addEventListener('DOMContentLoaded', async () => {
+            
+            if ('serviceWorker' in navigator) {
+                const updateBar = document.getElementById('pwa-update-bar');
+                const updateBtn = document.getElementById('pwa-update-btn');
+                let newWorker;
+
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    reg.addEventListener('updatefound', () => {
+                        newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                updateBar.classList.add('show');
+                            }
+                        });
+                    });
+                });
+
+                updateBtn.addEventListener('click', () => {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                });
+
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    window.location.reload();
+                    refreshing = true;
+                });
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            if(urlParams.has('error')) {
+                const errorMsg = urlParams.get('error');
+                // CORREÇÃO: Filtra "Bad Request" para não assustar o usuário
+                if(errorMsg && errorMsg.trim() !== "" && errorMsg.toLowerCase() !== 'bad request') {
+                    showFeedback(false, errorMsg);
+                }
+                window.history.replaceState({}, document.title, "/");
+            }
+
             try {
                 const response = await fetch('/check-session');
                 const data = await response.json();
                 if (response.ok && data.loggedIn) {
                     enterDashboard(data.user);
                 }
-            } catch (e) {}
+            } catch (e) { console.log("Sessão expirada ou não logado."); }
         });
+
+        function enterDashboard(user) {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('user-display-name').textContent = user.username;
+            initializeSocket();
+        }
 
         function toggleAuthForms() {
             const login = document.getElementById('login-form-container');
@@ -358,32 +733,57 @@
             }
         }
 
-        async function handleAuth(url, body) {
+        async function handleAuth(url, body, btnId) {
+            const btn = document.getElementById(btnId);
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
             try {
                 const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)});
                 const data = await res.json();
+                
                 if (res.ok) {
-                    if (url === '/login') window.location.reload();
-                    else { toggleAuthForms(); document.getElementById('login-username').value = body.username; showFeedback(true, 'Conta criada! Agora faça login.'); }
-                } else { showFeedback(false, data.message); }
-            } catch { showFeedback(false, 'Erro de conexão.'); }
+                    if (url === '/login') {
+                        window.location.reload();
+                    } else { 
+                        toggleAuthForms(); 
+                        document.getElementById('login-username').value = body.username; 
+                        showFeedback(true, 'Conta criada! Agora faça login.'); 
+                    }
+                } else {
+                    showFeedback(false, data.message || 'Ocorreu um erro.');
+                }
+            } catch (error) { 
+                showFeedback(false, 'Erro de conexão com o servidor.'); 
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         }
 
-        document.getElementById('login-form').onsubmit = (e) => { e.preventDefault(); handleAuth('/login', { username: document.getElementById('login-username').value, password: document.getElementById('login-password').value }); };
-        document.getElementById('register-form').onsubmit = (e) => { e.preventDefault(); handleAuth('/register', { username: document.getElementById('register-username').value, password: document.getElementById('register-password').value }); };
+        document.getElementById('login-form').onsubmit = (e) => { 
+            e.preventDefault(); 
+            handleAuth('/login', { 
+                username: document.getElementById('login-username').value, 
+                password: document.getElementById('login-password').value 
+            }, 'btn-login-submit'); 
+        };
 
-        function enterDashboard(user) {
-            authSection.style.display = 'none';
-            dashboardContainer.classList.remove('hidden');
-            document.getElementById('user-display-name').textContent = user.username;
-            initializeSocket();
-        }
+        document.getElementById('register-form').onsubmit = (e) => { 
+            e.preventDefault(); 
+            handleAuth('/register', { 
+                username: document.getElementById('register-username').value, 
+                password: document.getElementById('register-password').value 
+            }, 'btn-register-submit'); 
+        };
 
         function showFeedback(success, msg) {
+            const feedbackArea = document.getElementById('feedback-area');
             feedbackArea.textContent = msg;
             feedbackArea.className = success ? 'feedback-success' : 'feedback-error';
             feedbackArea.style.display = 'block';
-            setTimeout(() => feedbackArea.style.display = 'none', 3000);
+            setTimeout(() => feedbackArea.style.display = 'none', 4000);
         }
 
         function fillExamplePrompt() {
@@ -391,12 +791,11 @@
             document.getElementById('prompt').value = example;
         }
 
-        // --- SOCKET (sem alterações até `renderBotCard`) ---
-        let socket;
-        let currentUser = {}; 
-        let botsData = {}; 
-        let viewedUser = null;
-        let publicPrices = {};
+        function confirmLogout() {
+            if (confirm('Tem certeza que deseja sair do painel?')) {
+                window.location.href = '/logout';
+            }
+        }
 
         function initializeSocket() {
             if (socket && socket.connected) return;
@@ -431,18 +830,22 @@
                 if (!currentUser.isAdmin && bot.owner !== currentUser.username) return;
                 if (currentUser.isAdmin && viewedUser && bot.owner !== viewedUser) return;
                 
+                if (currentUser.isAdmin && !viewedUser && bot.owner === currentUser.username) {
+                } else if (currentUser.isAdmin && !viewedUser && bot.owner !== currentUser.username) {
+                    return; 
+                }
+
                 const btn = document.getElementById('create-bot-btn');
                 if(btn.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
                     btn.disabled = false;
                     btn.innerHTML = 'Salvar e Criar Robô';
                 }
-                
                 renderBotCard(bot); 
             });
             socket.on('bot-deleted', (d) => { const el = document.getElementById(`bot-${d.sessionName}`); if(el) el.remove(); });
             socket.on('log-message', (d) => {
                 const c = document.querySelector(`#bot-${d.sessionName} .logs-container`);
-                if(c && !d.message.startsWith('QR_CODE:')) {
+                if(c && !d.message.startsWith('QR_CODE:') && !d.message.startsWith('PAIRING_CODE:')) {
                     const l = document.createElement('div'); l.className='log-line'; l.textContent = `> ${d.message}`;
                     c.appendChild(l); c.scrollTop = c.scrollHeight;
                     sessionStorage.setItem(`log-${d.sessionName}`, c.innerHTML);
@@ -456,7 +859,7 @@
                     li.innerHTML = `
                         <div style="display:flex; flex-direction:column;">
                             <span style="font-weight:600; font-size:0.9rem;">${u.username}</span>
-                            <span style="font-size:0.75rem; color:#888;">${u.isAdmin ? 'Administrador' : `Limite: ${u.botLimit || 1} bots`} | IP: ${u.username}</span>
+                            <span style="font-size:0.75rem; color:#888;">${u.isAdmin ? 'Administrador' : `Limite: ${u.botLimit || 1} bots`} | ID: ${u.username}</span>
                         </div>
                         ${!u.isAdmin ? `<i class="fas fa-trash" style="color:var(--red); cursor:pointer; padding:5px;" onclick="delUser(event, '${u.username}')"></i>` : ''}
                     `;
@@ -500,9 +903,10 @@
         }
 
         function updateUserLimitUI(limit) {
-            document.getElementById('current-limit-display').innerText = limit;
+            const display = limit > 900 ? "Ilimitado" : limit;
+            document.getElementById('current-limit-display').innerText = display;
             if(document.getElementById('current-limit-display-modal')) {
-                document.getElementById('current-limit-display-modal').innerText = limit;
+                document.getElementById('current-limit-display-modal').innerText = display;
             }
         }
 
@@ -523,6 +927,20 @@
             socket.emit('admin-get-bots-for-user', { username: user.username });
         }
 
+        function goToMyBotsAdmin() {
+            viewedUser = null; 
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('user-view').classList.remove('hidden');
+            document.getElementById('nav-back-btn').classList.remove('hidden');
+            document.getElementById('nav-placeholder').classList.add('hidden');
+            document.getElementById('main-title-text').textContent = "Meus Robôs (Admin)";
+            document.getElementById('sub-title-text').textContent = "Criação de bots ilimitada para administração.";
+            document.getElementById('add-bot-label').textContent = 'Criar Novo Robô';
+            document.getElementById('user-logs-area').classList.remove('hidden');
+            document.getElementById('bots-grid').innerHTML = '';
+            socket.emit('get-my-bots');
+        }
+
         function goBackToAdminHome() {
             viewedUser = null;
             document.getElementById('user-view').classList.add('hidden');
@@ -532,7 +950,6 @@
             document.getElementById('bots-grid').innerHTML = '';
         }
 
-        // NOVA FUNÇÃO: Formatar data para dd/mm/aaaa HH:MM
         function formatDate(isoString) {
             if (!isoString) return 'N/A';
             const date = new Date(isoString);
@@ -553,6 +970,7 @@
             let timeText = 'Aguardando Ativação';
             let pct = 0;
             let isExpired = false;
+            let daysForInput = 0;
 
             if(!bot.activated) {
                 statusClass = 'st-inactive'; icon='fa-hourglass-start'; txt='Aguardando QR';
@@ -560,9 +978,12 @@
             } else {
                 const now = new Date();
                 const expireDate = new Date(bot.trialExpiresAt);
-                const totalDuration = 31 * 24 * 60 * 60 * 1000; // Aproximação de 31 dias
+                const totalDuration = 31 * 24 * 60 * 60 * 1000;
                 const timeLeft = expireDate - now;
                 
+                daysForInput = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+                if (daysForInput < 0) daysForInput = 0;
+
                 isExpired = timeLeft <= 0;
                 
                 if (bot.isTrial && !isExpired) {
@@ -586,7 +1007,7 @@
                     <div style="display:flex; gap:10px; align-items:center;">
                         <div class="counter-wrapper">
                             <button class="counter-btn" onclick="modDays('${bot.sessionName}', -1)"><i class="fas fa-minus"></i></button>
-                            <input type="number" id="d-${bot.sessionName}" class="days-input" value="0">
+                            <input type="number" id="d-${bot.sessionName}" class="days-input" value="${daysForInput}">
                             <button class="counter-btn" onclick="modDays('${bot.sessionName}', 1)"><i class="fas fa-plus"></i></button>
                         </div>
                         <button class="btn-save-days" onclick="admSaveDays('${bot.sessionName}')" title="Salvar"><i class="fas fa-save"></i></button>
@@ -594,15 +1015,51 @@
                 </div>
             ` : '';
 
-            const qrSection = (bot.status === 'Aguardando QR Code') ? `
-                <div class="qr-area">
-                    <div class="qr-instructions">
-                        <strong>Conectar WhatsApp:</strong>
-                        <ol><li>Abra o WhatsApp > Aparelhos Conectados</li><li>Conectar um aparelho</li></ol>
-                    </div>
-                    <div class="qr-tgt"></div>
-                </div>
-            ` : '';
+            let qrSection = '';
+            if (bot.status === 'Aguardando QR Code') {
+                if (bot.qr && bot.qr.startsWith('PAIRING_CODE:')) {
+                    const code = bot.qr.replace('PAIRING_CODE:', '');
+                    qrSection = `
+                        <div class="qr-area">
+                            <div class="qr-instructions">
+                                <strong>Conectar com Código:</strong>
+                                <ol>
+                                    <li>No WhatsApp > Aparelhos Conectados</li>
+                                    <li>Conectar um aparelho</li>
+                                    <li>Toque em "Conectar com número de telefone"</li>
+                                </ol>
+                            </div>
+                            <div class="pairing-code-display">${code}</div>
+                            <p style="font-size:0.8rem; color:#666;">Digite este código no seu celular.</p>
+                        </div>
+                    `;
+                } else {
+                    qrSection = `
+                        <div class="qr-area">
+                            <div class="qr-instructions">
+                                <strong>Conectar WhatsApp:</strong>
+                                <ol><li>Abra o WhatsApp > Aparelhos Conectados</li><li>Conectar um aparelho</li></ol>
+                            </div>
+                            <div class="qr-tgt" id="qr-tgt-${bot.sessionName}"></div>
+                            <button class="btn-share-qr" onclick="shareQrCode('${bot.sessionName}')">
+                                <i class="fas fa-share-alt"></i> Compartilhar QR
+                            </button>
+                            <button class="btn-use-code" onclick="openPairingModal('${bot.sessionName}')">
+                                <i class="fas fa-mobile-alt"></i> Conectar com Número
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+
+            let toggleBtnHtml = '';
+            const isRunning = bot.status === 'Online' || bot.status.includes('Iniciando') || bot.status.includes('Aguardando');
+
+            if (isRunning) {
+                toggleBtnHtml = `<button class="icon-btn btn-act-stop" onclick="sock('stop-bot','${bot.sessionName}')"><i class="fas fa-stop"></i><span>Desligar</span></button>`;
+            } else {
+                toggleBtnHtml = `<button class="icon-btn btn-act-start" onclick="sock('start-bot','${bot.sessionName}')"><i class="fas fa-play"></i><span>Iniciar</span></button>`;
+            }
 
             const html = `
                 <div class="card-header">
@@ -617,7 +1074,6 @@
                         <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%; background:${isExpired ? 'var(--red)' : 'var(--primary)'}"></div></div>
                     </div>
                     
-                    <!-- DATAS DE CRIAÇÃO E VENCIMENTO -->
                     <div style="border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px;">
                         <div class="date-info">
                             <span>Criado em:</span>
@@ -636,8 +1092,7 @@
                         </div>
                     </div>
                     <div class="action-grid">
-                        <button class="icon-btn btn-act-start" onclick="sock('start-bot','${bot.sessionName}')"><i class="fas fa-play"></i><span>Iniciar</span></button>
-                        <button class="icon-btn btn-act-stop" onclick="sock('stop-bot','${bot.sessionName}')"><i class="fas fa-stop"></i><span>Desligar</span></button>
+                        ${toggleBtnHtml}
                         <button class="icon-btn" onclick="openEdit('${bot.sessionName}')"><i class="fas fa-pen"></i><span>Editar</span></button>
                         <button class="icon-btn" onclick="openIgnoreModal('${bot.sessionName}')"><i class="fas fa-user-slash"></i><span>Ignorar</span></button>
                         <button class="icon-btn btn-act-pay" onclick="openPay('${bot.sessionName}')"><i class="fas fa-bolt"></i><span>Renovar</span></button>
@@ -658,14 +1113,155 @@
             if(svLogs) { 
                 const h = logC.firstElementChild.outerHTML; logC.innerHTML = h + svLogs.replace(/<div.*?TERMINAL.*?<\/div>/, ''); logC.scrollTop=logC.scrollHeight; 
             }
-            if(bot.status === 'Aguardando QR Code' && bot.qr) {
-                const qt = card.querySelector('.qr-tgt'); 
+            if(bot.status === 'Aguardando QR Code' && bot.qr && !bot.qr.startsWith('PAIRING_CODE:')) {
+                const qt = card.querySelector(`#qr-tgt-${bot.sessionName}`); 
                 if(qt) { qt.innerHTML=''; new QRCode(qt, {text:bot.qr, width:180, height:180}); }
             }
         }
 
+        function dataURItoBlob(dataURI) {
+            var byteString;
+            if (dataURI.split(',')[0].indexOf('base64') >= 0)
+                byteString = atob(dataURI.split(',')[1]);
+            else
+                byteString = unescape(dataURI.split(',')[1]);
+
+            var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+
+            var ia = new Uint8Array(byteString.length);
+            for (var i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+
+            return new Blob([ia], {type:mimeString});
+        }
+
+        async function shareQrCode(sessionName) {
+            const card = document.getElementById(`bot-${sessionName}`);
+            const container = card.querySelector(`#qr-tgt-${sessionName}`);
+            
+            if (!container) {
+                showFeedback(false, 'QR Code não encontrado.');
+                return;
+            }
+
+            let sourceUrl = '';
+            const canvasEl = container.querySelector('canvas');
+            const imgEl = container.querySelector('img');
+
+            if (canvasEl) {
+                sourceUrl = canvasEl.toDataURL('image/png');
+            } else if (imgEl && imgEl.src) {
+                sourceUrl = imgEl.src;
+            } else {
+                showFeedback(false, 'Imagem QR CODE ainda não gerada.');
+                return;
+            }
+
+            try {
+                const tempImg = new Image();
+                tempImg.onload = async () => {
+                    const size = 300; 
+                    const padding = 20; 
+                    
+                    const cvs = document.createElement('canvas');
+                    cvs.width = size;
+                    cvs.height = size;
+                    const ctx = cvs.getContext('2d');
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, size, size);
+
+                    ctx.drawImage(tempImg, padding, padding, size - (padding * 2), size - (padding * 2));
+
+                    cvs.toBlob(async (blob) => {
+                        if (!blob) {
+                            showFeedback(false, 'Erro ao gerar arquivo de imagem.');
+                            return;
+                        }
+
+                        const file = new File([blob], `qrcode_${sessionName}.png`, { type: "image/png" });
+
+                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                            await navigator.share({
+                                title: 'ZappBot QR Code',
+                                text: 'Escaneie este QR Code para conectar o bot ' + sessionName,
+                                files: [file]
+                            });
+                        } else {
+                            try {
+                                const item = new ClipboardItem({ "image/png": blob });
+                                await navigator.clipboard.write([item]);
+                                showFeedback(true, 'Imagem copiada para a área de transferência!');
+                            } catch (err) {
+                                showFeedback(false, 'Seu navegador não suporta compartilhamento nativo.');
+                            }
+                        }
+                    }, 'image/png');
+                };
+                
+                tempImg.src = sourceUrl;
+
+            } catch (err) {
+                console.error(err);
+                showFeedback(false, 'Erro ao compartilhar: ' + err.message);
+            }
+        }
+
+        async function sharePixPayment(type) {
+            const imgId = type === 'resell' ? 'resell-qrcode-display' : 'pix-qrcode-display';
+            const textId = type === 'resell' ? 'resell-copy-paste' : 'pix-copy-paste';
+
+            const img = document.getElementById(imgId);
+            const textCode = document.getElementById(textId).value;
+
+            if (!img.src || !textCode) {
+                showFeedback(false, 'Informações de pagamento não encontradas.');
+                return;
+            }
+
+            try {
+                const blob = await (await fetch(img.src)).blob();
+                const file = new File([blob], "pix_pagamento.png", { type: "image/png" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Pagamento Pix ZappBot',
+                        text: 'Aqui está o código Pix Copia e Cola:\n\n' + textCode,
+                        files: [file]
+                    });
+                } else {
+                    copyPixCode(textId);
+                    alert('Compartilhamento de arquivo não suportado neste navegador. O código Pix foi copiado para sua área de transferência!');
+                }
+            } catch (err) {
+                console.error(err);
+                copyPixCode(textId);
+                showFeedback(true, 'Código copiado! (Compartilhamento falhou)');
+            }
+        }
+
+        function openPairingModal(sessionName) {
+            document.getElementById('pairing-sessionName-hidden').value = sessionName;
+            document.getElementById('pairing-modal').style.display = 'flex';
+        }
+
+        document.getElementById('pairing-form').onsubmit = (e) => {
+            e.preventDefault();
+            const sessionName = document.getElementById('pairing-sessionName-hidden').value;
+            const phoneNumber = document.getElementById('pairing-phone-number').value;
+            
+            socket.emit('stop-bot', { sessionName });
+            
+            setTimeout(() => {
+                socket.emit('start-bot', { sessionName, phoneNumber });
+                document.getElementById('pairing-modal').style.display = 'none';
+                showFeedback(true, 'Solicitando código de pareamento...');
+            }, 1000);
+        };
+
         function sock(ev, name) { socket.emit(ev, { sessionName: name }); }
-        function delBot(n) { if(confirm('Apagar "'+n+'"? Se você ainda tiver tempo de teste, ele continuará correndo.')) sock('delete-bot', n); }
+        function delBot(n) { if(confirm('Apagar "'+n+'"?')) sock('delete-bot', n); }
         function modDays(sessionName, delta) { const input = document.getElementById(`d-${sessionName}`); let val = parseInt(input.value)||0; val+=delta; input.value=val; }
         function admSaveDays(sessionName) { socket.emit('admin-set-days', { sessionName: sessionName, days: document.getElementById(`d-${sessionName}`).value }); }
         function delUser(e, u) { e.stopPropagation(); if(confirm('Apagar usuário '+u+'?')) socket.emit('admin-delete-user', {username:u}); }
@@ -684,9 +1280,8 @@
             const modal = document.getElementById('ignore-modal');
             document.getElementById('ignore-sessionName-hidden').value = sessionName;
             const bot = botsData[sessionName];
-            
             renderIgnoredIdentifiers(bot.ignoredIdentifiers || []);
-            document.getElementById('new-identifier-input').value = ''; // Limpa o input
+            document.getElementById('new-identifier-input').value = ''; 
             modal.style.display = 'flex';
         }
 
@@ -699,10 +1294,7 @@
                 identifiers.forEach((item, index) => {
                     const el = document.createElement('div');
                     el.className = 'ignored-item';
-                    el.innerHTML = `
-                        <span>${item.value}</span>
-                        <i class="fas fa-times" onclick="removeIdentifier(${index})"></i>
-                    `;
+                    el.innerHTML = `<span>${item.value}</span><i class="fas fa-times" onclick="removeIdentifier(${index})"></i>`;
                     container.appendChild(el);
                 });
             }
@@ -713,19 +1305,11 @@
             const sessionName = document.getElementById('ignore-sessionName-hidden').value;
             const input = document.getElementById('new-identifier-input');
             const value = input.value.trim();
-
             if (!value) return;
-
-            const newIdentifier = { type: 'name', value: value }; // Sempre tipo 'name'
             const currentList = botsData[sessionName].ignoredIdentifiers || [];
-            
-            const isDuplicate = currentList.some(item => item.value.toLowerCase() === newIdentifier.value.toLowerCase());
-            if (isDuplicate) {
-                showFeedback(false, 'Este nome já está na lista.');
-                return;
-            }
-
-            const newList = [...currentList, newIdentifier];
+            const isDuplicate = currentList.some(item => item.value.toLowerCase() === value.toLowerCase());
+            if (isDuplicate) { showFeedback(false, 'Este nome já está na lista.'); return; }
+            const newList = [...currentList, { type: 'name', value: value }];
             updateIgnoredListOnServer(sessionName, newList);
             renderIgnoredIdentifiers(newList); 
             input.value = '';
@@ -744,21 +1328,16 @@
             socket.emit('update-ignored-identifiers', { sessionName, ignoredIdentifiers: newList });
         }
 
-
         document.getElementById('add-bot-form').onsubmit=(e)=>{
             e.preventDefault(); 
             const nInput = document.getElementById('sessionName');
             const pInput = document.getElementById('prompt');
             let n = nInput.value.trim().replace(/\s+/g,'_');
             if(n.length < 3) { alert('O nome deve ter 3 letras.'); return; }
-            const p = pInput.value.trim();
             const o = (currentUser.isAdmin && viewedUser) ? viewedUser : currentUser.username;
-            
             const btn = document.getElementById('create-bot-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
-
-            socket.emit('create-bot', { sessionName:n, prompt:p, owner:o });
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+            socket.emit('create-bot', { sessionName:n, prompt:pInput.value.trim(), owner:o });
             nInput.value=''; pInput.value='';
         };
         
@@ -776,7 +1355,6 @@
                 priceResell30: document.getElementById('price-resell-30').value,
             }); 
         };
-        document.getElementById('admin-create-user-form').onsubmit=(e)=>{ e.preventDefault(); socket.emit('admin-create-user', { username:document.getElementById('admin-new-username').value, password:document.getElementById('admin-new-password').value }); document.getElementById('modal-create-user').style.display='none'; };
 
         let currentPaySession = '';
         function openPay(n) {
@@ -786,14 +1364,12 @@
             document.getElementById('pay-session-name').innerText = n;
             const container = document.getElementById('plans-container');
             container.innerHTML = '';
-            
             const plans = [
                 { id: 'monthly', title: 'Mensal', price: publicPrices.monthly, desc: '30 dias' },
                 { id: 'quarterly', title: 'Trimestral', price: publicPrices.quarterly, desc: '90 dias' },
                 { id: 'semiannual', title: 'Semestral', price: publicPrices.semiannual, desc: '180 dias' },
                 { id: 'yearly', title: 'Anual', price: publicPrices.yearly, desc: '365 dias' }
             ];
-
             plans.forEach(p => {
                 const el = document.createElement('div'); el.className = 'plan-option';
                 el.innerHTML = `<div><div class="plan-title">${p.title}</div><div class="plan-desc">${p.desc}</div></div><div class="plan-price">R$ ${p.price}</div>`;
@@ -826,21 +1402,18 @@
             m.style.display = 'flex';
             const container = document.getElementById('resell-plans-container');
             container.innerHTML = '';
-
             const resellPlans = [
                 { id: 'resell_5', title: 'Pacote 5 Robôs', price: publicPrices.resell5, limit: 5 },
                 { id: 'resell_10', title: 'Pacote 10 Robôs', price: publicPrices.resell10, limit: 10 },
                 { id: 'resell_20', title: 'Pacote 20 Robôs', price: publicPrices.resell20, limit: 20 },
                 { id: 'resell_30', title: 'Pacote 30 Robôs', price: publicPrices.resell30, limit: 30 },
             ];
-
             resellPlans.forEach(p => {
                 const el = document.createElement('div'); el.className = 'plan-option';
                 el.innerHTML = `<div><div class="plan-title">${p.title} <span class="plan-badge-resell">Revenda</span></div><div class="plan-desc">Limite de ${p.limit} bots.</div></div><div class="plan-price">R$ ${p.price}</div>`;
                 el.onclick = () => selectResellPlan(p.id);
                 container.appendChild(el);
             });
-            
             document.getElementById('resell-step-select').classList.remove('hidden');
             document.getElementById('resell-pix-loading').classList.add('hidden');
             document.getElementById('resell-pix-content').classList.add('hidden');
@@ -869,3 +1442,4 @@
     </script>
 </body>
 </html>
+
