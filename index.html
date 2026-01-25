@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -171,7 +172,7 @@
         .qr-area { background:#fff; padding:15px; border-radius:8px; align-self:center; display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; }
         .qr-instructions { color: #333; margin-bottom: 10px; font-size: 0.8rem; text-align: left; width: 100%; }
         .qr-instructions ol { padding-left: 20px; margin: 5px 0; }
-        .qr-instructions li { margin-bottom: 4px; }
+        .qr-instructions li { margin-bottom: 6px; line-height: 1.4; }
         
         .btn-share-qr {
             background: var(--primary);
@@ -963,7 +964,10 @@
         }
 
         function renderBotCard(bot) {
+            const prevBot = botsData[bot.sessionName];
+            const prevStatus = prevBot ? prevBot.status : null;
             botsData[bot.sessionName] = bot;
+            
             let card = document.getElementById(`bot-${bot.sessionName}`);
             
             let statusClass = 'st-offline'; let icon = 'fa-power-off'; let txt = "Desligado";
@@ -1038,7 +1042,12 @@
                         <div class="qr-area">
                             <div class="qr-instructions">
                                 <strong>Conectar WhatsApp:</strong>
-                                <ol><li>Abra o WhatsApp > Aparelhos Conectados</li><li>Conectar um aparelho</li></ol>
+                                <ol>
+                                    <li>Abra o WhatsApp e toque no menu <strong><i class="fas fa-ellipsis-v"></i> (Android)</strong> ou <strong>Configurações (iPhone)</strong>.</li>
+                                    <li>Toque em <strong>Aparelhos Conectados</strong>.</li>
+                                    <li>Toque em <strong>Conectar um aparelho</strong>.</li>
+                                    <li>Aponte a câmera para o QR Code abaixo.</li>
+                                </ol>
                             </div>
                             <div class="qr-tgt" id="qr-tgt-${bot.sessionName}"></div>
                             <button class="btn-share-qr" onclick="shareQrCode('${bot.sessionName}')">
@@ -1115,7 +1124,17 @@
             }
             if(bot.status === 'Aguardando QR Code' && bot.qr && !bot.qr.startsWith('PAIRING_CODE:')) {
                 const qt = card.querySelector(`#qr-tgt-${bot.sessionName}`); 
-                if(qt) { qt.innerHTML=''; new QRCode(qt, {text:bot.qr, width:180, height:180}); }
+                if(qt) { 
+                    qt.innerHTML=''; 
+                    new QRCode(qt, {text:bot.qr, width:180, height:180}); 
+                    
+                    // Auto-scroll logic: Scroll only if status just changed to Waiting QR
+                    if (prevStatus !== 'Aguardando QR Code') {
+                        setTimeout(() => {
+                            qt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 500);
+                    }
+                }
             }
         }
 
@@ -1450,4 +1469,3 @@
     </script>
 </body>
 </html>
-
