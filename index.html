@@ -342,7 +342,7 @@
         }
 
         .btn-copy {
-            background: var(--primary);
+            background: var(--primary); 
             color: white;
             border: none;
             border-radius: 8px;
@@ -1274,7 +1274,15 @@
             document.getElementById('edit-prompt').value=botsData[n].prompt;
         }
         function closeEditModal() { document.getElementById('edit-modal').style.display='none'; }
-        document.getElementById('edit-bot-form').onsubmit = (e) => { e.preventDefault(); sock('update-bot', { sessionName:document.getElementById('edit-sessionName-hidden').value, newPrompt:document.getElementById('edit-prompt').value }); closeEditModal(); };
+        
+        document.getElementById('edit-bot-form').onsubmit = (e) => { 
+            e.preventDefault(); 
+            socket.emit('update-bot', { 
+                sessionName: document.getElementById('edit-sessionName-hidden').value, 
+                newPrompt: document.getElementById('edit-prompt').value 
+            }); 
+            closeEditModal(); 
+        };
 
         function openIgnoreModal(sessionName) {
             const modal = document.getElementById('ignore-modal');
