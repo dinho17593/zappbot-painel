@@ -11,6 +11,7 @@ const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { MercadoPagoConfig, Payment } = require('mercadopago');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -21,6 +22,7 @@ const BASE_DIR = __dirname;
 const BOTS_DB_PATH = path.join(BASE_DIR, 'bots.json');
 const USERS_DB_PATH = path.join(BASE_DIR, 'users.json');
 const SETTINGS_DB_PATH = path.join(BASE_DIR, 'settings.json');
+const GROUPS_DB_PATH = path.join(BASE_DIR, 'groups.json');
 const AUTH_SESSIONS_DIR = path.join(BASE_DIR, 'auth_sessions');
 const SESSION_FILES_DIR = path.join(BASE_DIR, 'sessions');
 const BOT_SCRIPT_PATH = path.join(BASE_DIR, 'index.js');
@@ -30,7 +32,10 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOG
 const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || "https://zappbot.shop/auth/google/callback";
 const SESSION_SECRET = process.env.SESSION_SECRET || 'sua-chave-secreta-muito-forte-e-diferente';
 
-app.set('trust proxy', true); 
+// Armazenamento em memória para os tokens de ativação
+const activationTokens = {};
+
+app.set('trust proxy', true);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(SESSION_SECRET));
@@ -41,10 +46,10 @@ const sessionMiddleware = session({
     store: new FileStore({ path: SESSION_FILES_DIR, logFn: function () { } }),
     secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: true, 
-    cookie: { 
-        secure: false, 
-        maxAge: 1000 * 60 * 60 * 24 * 7 
+    saveUninitialized: true,
+    cookie: {
+        secure: false,
+        maxAge: 1000 * 60 * 60 * 24 * 7
     }
 });
 
@@ -57,15 +62,39 @@ io.engine.use(sessionMiddleware);
 if (!fs.existsSync(AUTH_SESSIONS_DIR)) fs.mkdirSync(AUTH_SESSIONS_DIR, { recursive: true });
 if (!fs.existsSync(SESSION_FILES_DIR)) fs.mkdirSync(SESSION_FILES_DIR, { recursive: true });
 
-const readDB = (filePath) => fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
-const writeDB = (filePath, data) => fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+// --- FUNÇÕES DE BANCO DE DADOS CORRIGIDAS ---
+const readDB = (filePath) => {
+    try {
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            if (!content.trim()) return {}; // Retorna vazio se o arquivo estiver em branco
+            return JSON.parse(content);
+        }
+        return {};
+    } catch (e) {
+        console.error(`Erro ao ler DB (${filePath}):`, e);
+        return {};
+    }
+};
 
-// --- GARANTIR QUE O PRIMEIRO USUÁRIO SEJA SEMPRE ADMIN ---
+const writeDB = (filePath, data) => {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+        console.error(`Erro ao escrever DB (${filePath}):`, e);
+    }
+};
+
+// --- INICIALIZAÇÃO DOS ARQUIVOS JSON ---
+if (!fs.existsSync(GROUPS_DB_PATH)) writeDB(GROUPS_DB_PATH, {});
+if (!fs.existsSync(BOTS_DB_PATH)) writeDB(BOTS_DB_PATH, {}); // CORREÇÃO: Cria bots.json se não existir
+if (!fs.existsSync(USERS_DB_PATH)) writeDB(USERS_DB_PATH, {}); // CORREÇÃO: Cria users.json se não existir
+
 function ensureFirstUserIsAdmin() {
     try {
         const users = readDB(USERS_DB_PATH);
         const userKeys = Object.keys(users);
-        
+
         if (userKeys.length > 0) {
             const hasAdmin = userKeys.some(key => users[key].isAdmin === true);
             if (!hasAdmin) {
@@ -108,13 +137,13 @@ function getClientIp(req) {
 let activeBots = {};
 
 if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-    passport.use(new GoogleStrategy({ 
-            clientID: GOOGLE_CLIENT_ID, 
-            clientSecret: GOOGLE_CLIENT_SECRET, 
-            callbackURL: CALLBACK_URL, 
-            passReqToCallback: true,
-            proxy: true
-        },
+    passport.use(new GoogleStrategy({
+        clientID: GOOGLE_CLIENT_ID,
+        clientSecret: GOOGLE_CLIENT_SECRET,
+        callbackURL: CALLBACK_URL,
+        passReqToCallback: true,
+        proxy: true
+    },
         async (req, accessToken, refreshToken, profile, done) => {
             try {
                 const users = readDB(USERS_DB_PATH);
@@ -130,16 +159,17 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
                 const trialUsed = (!isAdmin && deviceUsed) ? true : false;
 
                 const newUser = {
-                    username, 
-                    password: null, 
-                    googleId: profile.id, 
+                    username,
+                    password: null,
+                    googleId: profile.id,
                     displayName: profile.displayName,
-                    createdAt: new Date(), 
-                    isAdmin, 
-                    botLimit: isAdmin ? 999999 : 1, 
+                    createdAt: new Date(),
+                    isAdmin,
+                    botLimit: isAdmin ? 999999 : 1,
                     log: [],
-                    trialUsed: trialUsed, 
-                    trialExpiresAt: null
+                    trialUsed: trialUsed,
+                    trialExpiresAt: null,
+                    salvagedTime: null
                 };
 
                 users[username] = newUser;
@@ -148,19 +178,41 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
                 return done(null, newUser);
             } catch (err) { return done(err, null); }
         }));
-    
+
     passport.serializeUser((user, done) => done(null, user.username));
-    
-    passport.deserializeUser((username, done) => { 
-        const u = readDB(USERS_DB_PATH)[username.toLowerCase()]; 
-        done(u ? null : new Error("Not found"), u); 
+
+    passport.deserializeUser((username, done) => {
+        const u = readDB(USERS_DB_PATH)[username.toLowerCase()];
+        done(u ? null : new Error("Not found"), u);
     });
 }
+
+app.post('/api/generate-activation-link', (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Não autorizado. Faça login para continuar.' });
+    }
+
+    const token = crypto.randomUUID();
+    const ownerEmail = req.session.user.username;
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutos a partir de agora
+
+    activationTokens[token] = { ownerEmail, expiresAt };
+
+    Object.keys(activationTokens).forEach(t => {
+        if (activationTokens[t].expiresAt < Date.now()) {
+            delete activationTokens[t];
+        }
+    });
+
+    const activationLink = `https://zappbot.shop/ativar?token=${token}`;
+    
+    res.json({ activationLink });
+});
 
 app.post('/api/create-payment', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: 'Não autorizado' });
     const settings = readDB(SETTINGS_DB_PATH);
-    const { sessionName, planType } = req.body;
+    const { sessionName, planType, groupId } = req.body;
     if (!settings.mpAccessToken) return res.status(500).json({ error: 'Erro config pagamento.' });
 
     let amount = 0, desc = '', extRef = '';
@@ -170,13 +222,19 @@ app.post('/api/create-payment', async (req, res) => {
         if (planType === 'resell_10') amount = parseFloat(settings.priceResell10);
         if (planType === 'resell_20') amount = parseFloat(settings.priceResell20);
         if (planType === 'resell_30') amount = parseFloat(settings.priceResell30);
-        desc = `Upgrade: ${planType}`; extRef = `${req.session.user.username}|${planType}`;
+        desc = `Upgrade: ${planType}`; extRef = `user|${req.session.user.username}|${planType}`;
+    } else if (groupId) {
+        if (planType === 'monthly') amount = parseFloat(settings.priceMonthly);
+        if (planType === 'quarterly') amount = parseFloat(settings.priceQuarterly);
+        if (planType === 'semiannual') amount = parseFloat(settings.priceSemiannual);
+        if (planType === 'yearly') amount = parseFloat(settings.priceYearly);
+        desc = `Ativação Grupo: ${groupId}`; extRef = `group|${groupId}|${planType}`;
     } else {
         if (planType === 'monthly') amount = parseFloat(settings.priceMonthly);
         if (planType === 'quarterly') amount = parseFloat(settings.priceQuarterly);
         if (planType === 'semiannual') amount = parseFloat(settings.priceSemiannual);
         if (planType === 'yearly') amount = parseFloat(settings.priceYearly);
-        desc = `Renova: ${sessionName}`; extRef = `${sessionName}|${planType}`;
+        desc = `Renova: ${sessionName}`; extRef = `bot|${sessionName}|${planType}`;
     }
 
     try {
@@ -196,45 +254,79 @@ app.post('/webhook/mercadopago', async (req, res) => {
 
             if (paymentData.status === 'approved') {
                 const parts = (paymentData.external_reference || '').split('|');
-                const ref1 = parts[0], ref2 = parts[1];
-                const users = readDB(USERS_DB_PATH);
+                const paymentType = parts[0];
+                const referenceId = parts[1];
+                const plan = parts[2];
 
-                if (ref2.startsWith('resell_')) {
-                    if (users[ref1]) {
-                        users[ref1].botLimit = parseInt(ref2.split('_')[1]);
-                        users[ref1].trialUsed = true;
-                        users[ref1].trialExpiresAt = "PAID_USER";
+                if (paymentType === 'user') {
+                    const users = readDB(USERS_DB_PATH);
+                    if (users[referenceId]) {
+                        users[referenceId].botLimit = parseInt(plan.split('_')[1]);
+                        users[referenceId].trialUsed = true;
+                        users[referenceId].trialExpiresAt = "PAID_USER";
                         writeDB(USERS_DB_PATH, users);
                         const sockets = await io.fetchSockets();
-                        sockets.forEach(s => { if (s.request.session.user?.username === ref1) s.emit('update-limit', users[ref1].botLimit); });
+                        sockets.forEach(s => { if (s.request.session.user?.username === referenceId) s.emit('update-limit', users[referenceId].botLimit); });
                     }
-                } else {
+                } else if (paymentType === 'bot') {
                     const bots = readDB(BOTS_DB_PATH);
-                    const bot = bots[ref1];
-                    if (bot && users[bot.owner]) {
+                    const bot = bots[referenceId];
+                    if (bot) {
                         const now = new Date();
                         const currentExpire = new Date(bot.trialExpiresAt);
-                        
                         let days = 30;
-                        if (ref2 === 'quarterly') days = 90;
-                        if (ref2 === 'semiannual') days = 180;
-                        if (ref2 === 'yearly') days = 365;
-
+                        if (plan === 'quarterly') days = 90;
+                        if (plan === 'semiannual') days = 180;
+                        if (plan === 'yearly') days = 365;
                         let baseDate = (!isNaN(currentExpire) && currentExpire > now) ? currentExpire : now;
                         baseDate.setDate(baseDate.getDate() + days);
-
                         bot.trialExpiresAt = baseDate.toISOString();
                         bot.isTrial = false;
                         if (!bot.activated) bot.activated = true;
-
                         writeDB(BOTS_DB_PATH, bots);
-                        
                         io.emit('bot-updated', bot);
-                        io.emit('payment-success', { sessionName: ref1 });
+                        io.emit('payment-success', { sessionName: referenceId });
+                    }
+                } else if (paymentType === 'group') {
+                    const groups = readDB(GROUPS_DB_PATH);
+                    const group = groups[referenceId];
+                    if (group) {
+                        const now = new Date();
+                        const currentExpire = group.expiresAt ? new Date(group.expiresAt) : now;
+                        let days = 30;
+                        if (plan === 'quarterly') days = 90;
+                        if (plan === 'semiannual') days = 180;
+                        if (plan === 'yearly') days = 365;
+                        let baseDate = (currentExpire > now) ? currentExpire : now;
+                        baseDate.setDate(baseDate.getDate() + days);
+                        
+                        group.status = 'active';
+                        group.expiresAt = baseDate.toISOString();
+                        writeDB(GROUPS_DB_PATH, groups);
+
+                        const sockets = await io.fetchSockets();
+                        sockets.forEach(s => {
+                            if (s.request.session.user?.username === group.owner) {
+                                s.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                                s.emit('feedback', { success: true, message: `Grupo "${group.groupName}" ativado com sucesso!` });
+                            }
+                        });
+
+                        const botSessionName = group.managedByBot;
+                        if (activeBots[botSessionName]) {
+                            console.log(`[PAGAMENTO GRUPO] Reiniciando bot agregador: ${botSessionName}`);
+                            activeBots[botSessionName].process.kill('SIGINT');
+                            setTimeout(() => {
+                                const bots = readDB(BOTS_DB_PATH);
+                                if (bots[botSessionName]) {
+                                    startBotProcess(bots[botSessionName]);
+                                }
+                            }, 2000);
+                        }
                     }
                 }
             }
-        } catch (e) { }
+        } catch (e) { console.error("Webhook Error:", e); }
     }
     res.sendStatus(200);
 });
@@ -247,7 +339,7 @@ app.post('/register', async (req, res) => {
     let users = readDB(USERS_DB_PATH);
     const username = req.body.username.toLowerCase().trim();
     const password = req.body.password;
-    
+
     if (users[username]) return res.status(400).json({ message: "Este usuário já está cadastrado." });
 
     const deviceUsed = req.signedCookies['zapp_device_used'] === 'true';
@@ -256,17 +348,18 @@ app.post('/register', async (req, res) => {
 
     users[username] = {
         username, password: await bcrypt.hash(password, 10), createdAt: new Date(), isAdmin,
-        botLimit: isAdmin ? 999999 : 1, log: [], 
-        trialUsed: trialUsed, 
-        trialExpiresAt: null
+        botLimit: isAdmin ? 999999 : 1, log: [],
+        trialUsed: trialUsed,
+        trialExpiresAt: null,
+        salvagedTime: null
     };
 
     writeDB(USERS_DB_PATH, users);
 
-    res.cookie('zapp_device_used', 'true', { 
-        maxAge: 3650 * 24 * 60 * 60 * 1000, 
-        httpOnly: true, 
-        signed: true 
+    res.cookie('zapp_device_used', 'true', {
+        maxAge: 3650 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        signed: true
     });
 
     res.status(201).json({ message: "OK" });
@@ -275,11 +368,11 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
     const username = req.body.username.toLowerCase().trim();
     const u = readDB(USERS_DB_PATH)[username];
-    
+
     if (!u || !u.password || !await bcrypt.compare(req.body.password, u.password)) {
         return res.status(401).json({ message: "Usuário ou senha incorretos." });
     }
-    req.session.user = { username: u.username, isAdmin: !!u.isAdmin }; 
+    req.session.user = { username: u.username, isAdmin: !!u.isAdmin };
     res.status(200).json({ message: "OK" });
 });
 
@@ -289,26 +382,26 @@ app.get('/auth/google/callback', (req, res, next) => {
     if (req.isAuthenticated()) return res.redirect('/');
 
     passport.authenticate('google', (err, user, info) => {
-        if (err) { 
+        if (err) {
             console.error("Erro Google Auth:", err);
             const msg = err.message || "Erro desconhecido";
             return res.redirect(`/?error=${encodeURIComponent(msg)}`);
         }
-        
+
         if (!user) {
-            return res.redirect('/'); 
+            return res.redirect('/');
         }
 
         req.logIn(user, (err) => {
-            if (err) { 
+            if (err) {
                 console.error("Erro login session:", err);
                 return res.redirect(`/?error=${encodeURIComponent(err.message)}`);
             }
-            
-            res.cookie('zapp_device_used', 'true', { 
-                maxAge: 3650 * 24 * 60 * 60 * 1000, 
-                httpOnly: true, 
-                signed: true 
+
+            res.cookie('zapp_device_used', 'true', {
+                maxAge: 3650 * 24 * 60 * 60 * 1000,
+                httpOnly: true,
+                signed: true
             });
 
             req.session.user = { username: user.username, isAdmin: !!user.isAdmin };
@@ -334,15 +427,15 @@ app.get('/check-session', (req, res) => {
 
 io.use((socket, next) => {
     const sessionUser = socket.request.session.user || (socket.request.session.passport?.user);
-    
+
     if (sessionUser) {
         const username = (typeof sessionUser === 'object' ? sessionUser.username : sessionUser).toLowerCase();
         const dbUser = readDB(USERS_DB_PATH)[username];
-        
+
         if (dbUser) {
-            socket.request.session.user = { 
-                username: dbUser.username, 
-                isAdmin: dbUser.isAdmin 
+            socket.request.session.user = {
+                username: dbUser.username,
+                isAdmin: dbUser.isAdmin
             };
             next();
         } else {
@@ -353,6 +446,7 @@ io.use((socket, next) => {
     }
 });
 
+// Este bloco lida com eventos de clientes conectados via navegador (o painel)
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
     if (!user) { socket.disconnect(); return; }
@@ -377,7 +471,7 @@ io.on('connection', (socket) => {
                 const d = parseInt(days);
                 const now = new Date();
                 const newDate = new Date(now);
-                
+
                 newDate.setDate(newDate.getDate() + d);
                 newDate.setMinutes(newDate.getMinutes() - 10);
 
@@ -391,60 +485,121 @@ io.on('connection', (socket) => {
         });
 
         socket.on('admin-get-users', () => socket.emit('admin-users-list', Object.values(readDB(USERS_DB_PATH)).map(({ password, ...r }) => r)));
-        
+
         socket.on('admin-delete-user', ({ username }) => {
             const users = readDB(USERS_DB_PATH);
             delete users[username];
             writeDB(USERS_DB_PATH, users);
             socket.emit('admin-users-list', Object.values(users).map(({ password, ...r }) => r));
         });
-        
+
         socket.on('admin-get-bots-for-user', ({ username }) => socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === username)));
+        
+        socket.on('admin-get-groups-for-user', ({ username }) => {
+            socket.emit('initial-groups-list', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === username));
+        });
     }
 
-    socket.on('get-my-bots', () => { 
-        socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username)); 
+    socket.on('get-my-bots', () => {
+        // CORREÇÃO: Garante que a comparação de dono seja case-insensitive
+        const allBots = Object.values(readDB(BOTS_DB_PATH));
+        const myBots = allBots.filter(b => b.owner.toLowerCase() === user.username.toLowerCase());
+        socket.emit('initial-bots-list', myBots);
+    });
+
+    socket.on('get-my-groups', () => {
+        socket.emit('initial-groups-list', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === user.username));
+    });
+
+    socket.on('delete-group', ({ groupId }) => {
+        const groups = readDB(GROUPS_DB_PATH);
+        const group = groups[groupId];
+
+        if (!group) return socket.emit('feedback', { success: false, message: 'Grupo não encontrado.' });
+
+        const bots = readDB(BOTS_DB_PATH);
+        const bot = bots[group.managedByBot];
+        
+        const isBotOwner = bot && bot.owner === user.username;
+        const isGroupOwner = group.owner === user.username;
+
+        if (!user.isAdmin && !isBotOwner && !isGroupOwner) {
+            return socket.emit('feedback', { success: false, message: 'Permissão negada.' });
+        }
+
+        const botSessionName = group.managedByBot;
+        
+        delete groups[groupId];
+        writeDB(GROUPS_DB_PATH, groups);
+
+        socket.emit('group-list-updated', Object.values(groups).filter(g => g.owner === user.username));
+        socket.emit('feedback', { success: true, message: 'Grupo removido com sucesso.' });
+
+        if (activeBots[botSessionName]) {
+            console.log(`[DELETE GROUP] Reiniciando bot ${botSessionName} para aplicar remoção do grupo.`);
+            activeBots[botSessionName].process.kill('SIGINT');
+            delete activeBots[botSessionName];
+            
+            setTimeout(() => {
+                const currentBots = readDB(BOTS_DB_PATH);
+                if (currentBots[botSessionName]) {
+                    startBotProcess(currentBots[botSessionName]);
+                }
+            }, 1000);
+        }
     });
 
     socket.on('create-bot', (d) => {
         const bots = readDB(BOTS_DB_PATH);
-        const users = readDB(USERS_DB_PATH);
+        let users = readDB(USERS_DB_PATH);
         const owner = (user.isAdmin && d.owner) ? d.owner : user.username;
         const ownerData = users[owner];
 
         if (bots[d.sessionName]) return socket.emit('feedback', { success: false, message: 'Nome de robô já em uso.' });
 
-        if (Object.values(bots).filter(b => b.owner === owner).length >= (ownerData.botLimit || 1) && !ownerData.isAdmin) {
+        if (d.botType !== 'group' && Object.values(bots).filter(b => b.owner === owner && b.botType !== 'group').length >= (ownerData.botLimit || 1) && !ownerData.isAdmin) {
             return socket.emit('feedback', { success: false, error: 'limit_reached' });
         }
-        
-        const now = new Date();
-        let trialEndDate = new Date(now);
-        let isTrial = false;
 
-        if (ownerData.isAdmin) {
-            trialEndDate.setHours(trialEndDate.getHours() + 24);
-            isTrial = true;
-        } else if (!ownerData.trialUsed) {
-            trialEndDate.setHours(trialEndDate.getHours() + 24);
-            isTrial = true;
-            ownerData.trialUsed = true;
-            users[owner] = ownerData;
-            writeDB(USERS_DB_PATH, users);
+        const now = new Date();
+        let trialEndDate = new Date(0);
+        let isTrial = false;
+        let feedbackMessage = 'Robô criado. Realize o pagamento para ativar.';
+
+        if (d.botType !== 'group') {
+            if (ownerData.salvagedTime && new Date(ownerData.salvagedTime.expiresAt) > now) {
+                trialEndDate = new Date(ownerData.salvagedTime.expiresAt);
+                isTrial = ownerData.salvagedTime.isTrial;
+                ownerData.salvagedTime = null;
+                users[owner] = ownerData;
+                writeDB(USERS_DB_PATH, users);
+                feedbackMessage = 'Bot criado utilizando o tempo restante do anterior.';
+            } else {
+                if (ownerData.isAdmin || !ownerData.trialUsed) {
+                    trialEndDate = new Date(now);
+                    trialEndDate.setHours(trialEndDate.getHours() + 24);
+                    isTrial = true;
+                    feedbackMessage = 'Robô criado e iniciando (Teste Grátis)...';
+                }
+            }
         } else {
-            trialEndDate = new Date(0); 
+            trialEndDate = new Date(now);
+            trialEndDate.setFullYear(trialEndDate.getFullYear() + 10);
+            isTrial = false;
+            feedbackMessage = 'Bot Agregador de Grupos criado com sucesso!';
         }
 
         const newBot = {
             sessionName: d.sessionName,
             prompt: d.prompt,
             status: 'Offline',
-            owner,
+            owner: owner.toLowerCase(), // CORREÇÃO: Salva sempre em minúsculo
             activated: false,
             isTrial: isTrial,
             createdAt: now.toISOString(),
             trialExpiresAt: trialEndDate.toISOString(),
-            ignoredIdentifiers: []
+            ignoredIdentifiers: [],
+            botType: d.botType || 'individual'
         };
 
         bots[d.sessionName] = newBot;
@@ -454,10 +609,8 @@ io.on('connection', (socket) => {
         const canStart = new Date(newBot.trialExpiresAt) > new Date();
         if (canStart) {
             startBotProcess(newBot);
-            socket.emit('feedback', { success: true, message: 'Robô criado e iniciando (Teste Grátis)...' });
-        } else {
-            socket.emit('feedback', { success: true, message: 'Robô criado. Realize o pagamento para ativar.' });
         }
+        socket.emit('feedback', { success: true, message: feedbackMessage });
     });
 
     socket.on('start-bot', ({ sessionName, phoneNumber }) => {
@@ -482,41 +635,70 @@ io.on('connection', (socket) => {
     });
 
     socket.on('delete-bot', ({ sessionName }) => {
-        const bots = readDB(BOTS_DB_PATH);
-        if (activeBots[sessionName]) { activeBots[sessionName].process.kill('SIGINT'); delete activeBots[sessionName]; }
+        let bots = readDB(BOTS_DB_PATH);
+        let users = readDB(USERS_DB_PATH);
+        const botToDelete = bots[sessionName];
+
+        if (!botToDelete || (!user.isAdmin && botToDelete.owner !== user.username)) return;
+
+        if (botToDelete.botType !== 'group') {
+            const owner = users[botToDelete.owner];
+            const expirationDate = new Date(botToDelete.trialExpiresAt);
+            if (owner && expirationDate > new Date()) {
+                owner.salvagedTime = {
+                    expiresAt: botToDelete.trialExpiresAt,
+                    isTrial: botToDelete.isTrial
+                };
+                users[botToDelete.owner] = owner;
+                writeDB(USERS_DB_PATH, users);
+                socket.emit('feedback', { success: true, message: 'Bot excluído. O tempo restante foi salvo para o próximo bot que você criar.' });
+            } else {
+                socket.emit('feedback', { success: true, message: 'Bot excluído.' });
+            }
+        } else {
+             socket.emit('feedback', { success: true, message: 'Bot Agregador excluído.' });
+        }
+
+        if (activeBots[sessionName]) {
+            activeBots[sessionName].process.kill('SIGINT');
+            delete activeBots[sessionName];
+        }
         delete bots[sessionName];
         writeDB(BOTS_DB_PATH, bots);
-        if (fs.existsSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`))) fs.rmSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`), { recursive: true });
+        if (fs.existsSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`))) {
+            fs.rmSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`), { recursive: true, force: true });
+        }
         io.emit('bot-deleted', { sessionName });
     });
 
     socket.on('update-bot', (d) => {
         const bots = readDB(BOTS_DB_PATH);
         const bot = bots[d.sessionName];
-        
+
         if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
 
         if (bot) {
             bot.prompt = d.newPrompt;
+            if (d.botType !== undefined) bot.botType = d.botType;
             writeDB(BOTS_DB_PATH, bots);
             io.emit('bot-updated', bot);
 
             if (activeBots[d.sessionName]) {
                 try {
                     activeBots[d.sessionName].process.kill('SIGINT');
-                } catch (e) { 
+                } catch (e) {
                     console.error(`Erro ao parar ${d.sessionName} para update:`, e);
                 }
-                
+
                 delete activeBots[d.sessionName];
-                
-                socket.emit('feedback', { success: true, message: 'Prompt salvo. Reiniciando o robô...' });
+
+                socket.emit('feedback', { success: true, message: 'Configurações salvas. Reiniciando o robô...' });
 
                 setTimeout(() => {
                     startBotProcess(bot);
                 }, 1000);
             } else {
-                socket.emit('feedback', { success: true, message: 'Prompt salvo com sucesso.' });
+                socket.emit('feedback', { success: true, message: 'Configurações salvas com sucesso.' });
             }
         }
     });
@@ -540,15 +722,95 @@ io.on('connection', (socket) => {
     });
 });
 
+io.on('group-activation-request', ({ groupId, groupName, activationToken, botSessionName }) => {
+    console.log(`[SERVIDOR] 1. Evento 'group-activation-request' recebido do bot ${botSessionName}.`);
+    console.log(`[SERVIDOR]    - Token recebido: ${activationToken}`);
+
+    const tokenData = activationTokens[activationToken];
+
+    if (!tokenData || tokenData.expiresAt < Date.now()) {
+        console.error(`[SERVIDOR] ERRO: Token inválido ou expirado (${activationToken}). Ativação falhou.`);
+        return;
+    }
+    console.log(`[SERVIDOR] 2. Token validado com sucesso.`);
+
+    const { ownerEmail } = tokenData;
+    delete activationTokens[activationToken]; 
+    console.log(`[SERVIDOR] 3. Token associado ao usuário: ${ownerEmail}. Token invalidado.`);
+
+    const users = readDB(USERS_DB_PATH);
+    const groups = readDB(GROUPS_DB_PATH);
+
+    if (!users[ownerEmail]) {
+        console.error(`[SERVIDOR] ERRO: O usuário do token (${ownerEmail}) não foi encontrado no banco de dados.`);
+        return;
+    }
+    if (groups[groupId]) {
+        console.warn(`[SERVIDOR] AVISO: O grupo '${groupName}' (${groupId}) já existe no banco de dados.`);
+        const sockets = io.sockets.sockets;
+        for (const s of sockets.values()) {
+            if (s.request.session.user?.username === ownerEmail) {
+                s.emit('feedback', { success: false, message: `O grupo "${groupName}" já está na sua lista.` });
+            }
+        }
+        return;
+    }
+
+    const newGroup = {
+        groupId: groupId,
+        groupName: groupName,
+        owner: ownerEmail,
+        managedByBot: botSessionName,
+        status: "pending_payment",
+        createdAt: new Date().toISOString(),
+        expiresAt: null
+    };
+
+    groups[groupId] = newGroup;
+    writeDB(GROUPS_DB_PATH, groups);
+    console.log(`[SERVIDOR] 4. Grupo '${groupName}' salvo no groups.json.`);
+
+    let userSocketFound = false;
+    const connectedSockets = io.sockets.sockets;
+    for (const [socketId, s] of connectedSockets.entries()) {
+        if (s.request.session.user?.username === ownerEmail) {
+            console.log(`[SERVIDOR] 5. Socket do usuário ${ownerEmail} encontrado! Enviando atualização para o painel.`);
+            s.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
+            s.emit('feedback', { success: true, message: `Seu grupo "${groupName}" está pronto para ativação!` });
+            userSocketFound = true;
+            break;
+        }
+    }
+
+    if (!userSocketFound) {
+        console.warn(`[SERVIDOR] AVISO: O grupo foi criado, mas o usuário ${ownerEmail} não está com o painel aberto para receber a notificação em tempo real.`);
+    }
+});
+
 
 function startBotProcess(bot, phoneNumber = null) {
     const env = { ...process.env, API_KEYS_GEMINI: process.env.API_KEYS_GEMINI };
     const ignoredIdentifiersArg = JSON.stringify(bot.ignoredIdentifiers || []);
     
-    const args = [BOT_SCRIPT_PATH, bot.sessionName, bot.prompt, ignoredIdentifiersArg];
-    if (phoneNumber) {
-        args.push(phoneNumber);
+    const args = [
+        BOT_SCRIPT_PATH,
+        bot.sessionName,
+        bot.prompt,
+        ignoredIdentifiersArg,
+        phoneNumber || 'null'
+    ];
+
+    let authorizedGroupsArg = '[]';
+    if (bot.botType === 'group') {
+        const allGroups = readDB(GROUPS_DB_PATH);
+        const authorizedGroups = Object.values(allGroups)
+            .filter(g => g.managedByBot === bot.sessionName && g.status === 'active')
+            .map(g => ({ groupId: g.groupId, expiresAt: g.expiresAt }));
+        authorizedGroupsArg = JSON.stringify(authorizedGroups);
     }
+    
+    args.push(authorizedGroupsArg);
+    args.push(bot.botType || 'individual');
 
     const p = spawn('node', args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
@@ -559,19 +821,11 @@ function startBotProcess(bot, phoneNumber = null) {
         const msg = d.toString().trim();
 
         if (msg.startsWith('QR_CODE:')) {
-            updateBotStatus(bot.sessionName, 'Aguardando QR Code', msg.replace('QR_CODE:', ''));
+            updateBotStatus(bot.sessionName, 'Aguardando QR Code', { qr: msg.replace('QR_CODE:', '') });
         } else if (msg.startsWith('PAIRING_CODE:')) {
-            updateBotStatus(bot.sessionName, 'Aguardando QR Code', msg); 
+            updateBotStatus(bot.sessionName, 'Aguardando QR Code', { qr: msg });
         } else if (msg.includes('ONLINE!')) {
-            const bots = readDB(BOTS_DB_PATH);
-            const currentBot = bots[bot.sessionName];
-
-            if (currentBot && !currentBot.activated) {
-                currentBot.activated = true;
-                writeDB(BOTS_DB_PATH, bots);
-                io.emit('bot-updated', currentBot);
-            }
-            updateBotStatus(bot.sessionName, 'Online');
+            updateBotStatus(bot.sessionName, 'Online', { setActivated: true });
         }
         io.emit('log-message', { sessionName: bot.sessionName, message: msg });
     });
@@ -583,27 +837,43 @@ function startBotProcess(bot, phoneNumber = null) {
 }
 
 
-function updateBotStatus(name, status, qr = null) {
+function updateBotStatus(name, status, options = {}) {
     const bots = readDB(BOTS_DB_PATH);
-    if (bots[name]) {
-        bots[name].status = status;
-        if (qr) bots[name].qr = qr;
+    const bot = bots[name];
+    if (bot) {
+        bot.status = status;
+
+        if (options.qr !== undefined) {
+            bot.qr = options.qr;
+        } else if (status !== 'Aguardando QR Code') {
+            bot.qr = null;
+        }
+
+        if (options.setActivated && !bot.activated) {
+            bot.activated = true;
+
+            const users = readDB(USERS_DB_PATH);
+            const ownerData = users[bot.owner];
+            if (ownerData && !ownerData.isAdmin && bot.isTrial && !ownerData.trialUsed) {
+                ownerData.trialUsed = true;
+                writeDB(USERS_DB_PATH, users);
+            }
+        }
+
         writeDB(BOTS_DB_PATH, bots);
-        io.emit('bot-updated', bots[name]);
+        io.emit('bot-updated', bot);
     }
 }
 
-// --- CORREÇÃO: REINICIAR BOTS ATIVOS AO LIGAR O SERVIDOR ---
 function restartActiveBots() {
     const bots = readDB(BOTS_DB_PATH);
     console.log('[SISTEMA] Verificando bots para reiniciar...');
-    
+
     Object.values(bots).forEach(bot => {
-        // Se o bot estava Online, Iniciando ou Aguardando QR, tentamos reiniciar
         if (bot.status === 'Online' || bot.status.includes('Iniciando') || bot.status.includes('Aguardando')) {
             const now = new Date();
             const expires = new Date(bot.trialExpiresAt);
-            
+
             if (expires > now) {
                 console.log(`[RESTART] Reiniciando bot: ${bot.sessionName}`);
                 startBotProcess(bot);
@@ -613,11 +883,10 @@ function restartActiveBots() {
             }
         }
     });
-    // Atualiza o DB caso algum bot tenha sido marcado como Offline por expiração
     writeDB(BOTS_DB_PATH, bots);
 }
 
 server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
-    restartActiveBots(); // Chama a função ao iniciar
+    restartActiveBots();
 });
