@@ -157,7 +157,6 @@ async function ligarBot() {
     const sock = makeWASocket({
         version,
         logger,
-        printQRInTerminal: !phoneNumberArg, // Importante: Não imprimir QR se estiver usando código
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -165,7 +164,6 @@ async function ligarBot() {
         syncFullHistory: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        // Configuração de navegador para evitar erros de pareamento
         browser: ["Ubuntu", "Chrome", "20.0.04"], 
         getMessage: async () => ({ conversation: 'hello' })
     });
@@ -174,7 +172,6 @@ async function ligarBot() {
     if (phoneNumberArg && !sock.authState.creds.me && !sock.authState.creds.registered) {
         console.log(`[${nomeSessao}] Solicitando código de pareamento para: ${phoneNumberArg}`);
         
-        // Pequeno delay para garantir que o socket esteja pronto
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(phoneNumberArg);
@@ -189,7 +186,7 @@ async function ligarBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr && !phoneNumberArg) {
+        if (qr) {
             console.log(`QR_CODE:${qr}`);
         }
 
@@ -340,4 +337,3 @@ async function ligarBot() {
 }
 
 ligarBot().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
-
