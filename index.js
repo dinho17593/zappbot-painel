@@ -12,21 +12,21 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const io = require('socket.io-client');
 
+// --- CONFIGURAÇÃO DE ARGUMENTOS ---
 const nomeSessao = process.argv[2];
 const promptSistema = process.argv[3];
 const ignoredIdentifiersArg = process.argv[4] || '[]';
 let phoneNumberArg = (process.argv[5] && process.argv[5] !== 'null') ? process.argv[5] : null;
 const authorizedGroupsArg = process.argv[6] || '[]';
-const botType = process.argv[7] || 'individual';
+const botType = process.argv[7] || 'individual'; // 'individual' ou 'group'
 
-// Limpeza crítica do número de telefone para evitar erros do Baileys
+// Limpeza do número de telefone
 if (phoneNumberArg) {
     phoneNumberArg = phoneNumberArg.replace(/[^0-9]/g, '');
 }
 
 const modeloGemini = 'gemini-flash-latest';
-
-const socket = io('http://localhost:3000');
+const socket = io('http://localhost:3000'); // Ajuste a porta se necessário
 
 socket.on('connect', () => {
     console.log(`[${nomeSessao}] Conectado ao servidor principal via Socket.IO.`);
@@ -43,6 +43,7 @@ if (!nomeSessao || !promptSistema) {
     process.exit(1);
 }
 
+// --- PARSING DE LISTAS ---
 let ignoredIdentifiers = [];
 try {
     ignoredIdentifiers = JSON.parse(ignoredIdentifiersArg);
@@ -63,6 +64,7 @@ try {
     console.error('❌ Erro ao interpretar a lista de grupos autorizados:', e);
 }
 
+// --- CONFIGURAÇÃO GEMINI ---
 const API_KEYS_STRING = process.env.API_KEYS_GEMINI;
 if (!API_KEYS_STRING || !API_KEYS_STRING.trim()) {
     console.error('❌ ERRO: Nenhuma chave API do Gemini foi fornecida no .env');
@@ -70,11 +72,6 @@ if (!API_KEYS_STRING || !API_KEYS_STRING.trim()) {
 }
 
 const API_KEYS = API_KEYS_STRING.split('\n').map(key => key.trim()).filter(Boolean);
-if (API_KEYS.length === 0) {
-    console.error('❌ ERRO: O formato das chaves API é inválido.');
-    process.exit(1);
-}
-
 let currentApiKeyIndex = 0;
 let genAI = new GoogleGenerativeAI(API_KEYS[currentApiKeyIndex]);
 let model = genAI.getGenerativeModel({ model: modeloGemini });
@@ -93,6 +90,7 @@ function switchToNextApiKey() {
     model = genAI.getGenerativeModel({ model: modeloGemini });
 }
 
+// --- PROCESSAMENTO IA ---
 async function processarComGemini(jid, input, isAudio = false) {
     for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
         try {
@@ -145,9 +143,10 @@ async function processarComGemini(jid, input, isAudio = false) {
             }
         }
     }
-    return "Estou sobrecarregado no momento, tente novamente em alguns segundos.";
+    return "Estou processando muitas mensagens no momento.";
 }
 
+// --- INICIALIZAÇÃO DO BOT ---
 async function ligarBot() {
     console.log(`🚀 Bot iniciado → ${nomeSessao} (Tipo: ${botType})`);
     const authPath = `./auth_sessions/auth_${nomeSessao}`;
@@ -157,6 +156,7 @@ async function ligarBot() {
     const sock = makeWASocket({
         version,
         logger,
+        printQRInTerminal: !phoneNumberArg, 
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -164,21 +164,48 @@ async function ligarBot() {
         syncFullHistory: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        browser: ["Ubuntu", "Chrome", "20.0.04"], 
+        browser: ["ZappBot", "Chrome", "1.0.0"], 
         getMessage: async () => ({ conversation: 'hello' })
     });
 
-    // Lógica de Pareamento por Código
+    // --- OUVINTE DE RESULTADO DE ATIVAÇÃO (NOVO) ---
+    // Remove qualquer ouvinte anterior para evitar duplicidade
+    socket.off('group-activation-result');
+    
+    socket.on('group-activation-result', async (data) => {
+        // Verifica se a resposta é para este bot e se tem ID do grupo
+        if (data.botSessionName === nomeSessao && data.groupId) {
+            
+            if (data.success) {
+                console.log(`[${nomeSessao}] ✅ Ativação confirmada para o grupo ${data.groupId}`);
+                
+                // 1. Atualiza a memória local do bot para ele começar a responder imediatamente
+                authorizedGroups[data.groupId] = new Date(data.expiresAt);
+
+                // 2. Envia a mensagem de confirmação
+                await sock.sendMessage(data.groupId, { text: '✅ Grupo ativado com sucesso!' });
+                
+                // 3. Pequeno delay e envia a mensagem de boas-vindas
+                await delay(1500);
+                await sock.sendMessage(data.groupId, { text: 'Olá, obrigado por me adicionar ao grupo! Espero ser muito útil!' });
+
+            } else {
+                // Caso o servidor recuse (token inválido, etc)
+                console.log(`[${nomeSessao}] ❌ Falha na ativação: ${data.message}`);
+                await sock.sendMessage(data.groupId, { text: `❌ Não foi possível ativar: ${data.message}` });
+            }
+        }
+    });
+
+    // Pareamento por Código
     if (phoneNumberArg && !sock.authState.creds.me && !sock.authState.creds.registered) {
         console.log(`[${nomeSessao}] Solicitando código de pareamento para: ${phoneNumberArg}`);
-        
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(phoneNumberArg);
                 console.log(`PAIRING_CODE:${code}`);
             } catch (err) {
                 console.error('Erro ao solicitar pairing code:', err);
-                console.log(`ERRO: Verifique se o número ${phoneNumberArg} está correto.`);
             }
         }, 3000);
     }
@@ -186,7 +213,7 @@ async function ligarBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
+        if (qr && !phoneNumberArg) {
             console.log(`QR_CODE:${qr}`);
         }
 
@@ -227,6 +254,7 @@ async function ligarBot() {
         const jid = msg.key.remoteJid;
         const isGroup = jid.endsWith('@g.us');
 
+        // --- TRATAMENTO DE TEXTO E MÍDIA ---
         let texto = msg.message.conversation || 
                     msg.message.extendedTextMessage?.text || 
                     msg.message.imageMessage?.caption || 
@@ -246,28 +274,26 @@ async function ligarBot() {
 
         if (!texto.trim() && !isAudio) return;
 
+        // --- DETECÇÃO DE LINK DE ATIVAÇÃO ---
         const activationLinkPattern = 'zappbot.shop/ativar?token=';
         if (isGroup && (texto.includes(activationLinkPattern) || (msg.message.extendedTextMessage?.text || '').includes(activationLinkPattern))) {
             try {
                 const fullText = msg.message.extendedTextMessage?.text || texto;
                 const urlRegex = /(https?:\/\/[^\s]+)/g;
                 const foundUrls = fullText.match(urlRegex);
-
                 if (foundUrls) {
                     for (const urlStr of foundUrls) {
                         if (urlStr.includes(activationLinkPattern)) {
                             const urlObj = new URL(urlStr);
                             const token = urlObj.searchParams.get('token');
-
                             if (token) {
                                 const groupMetadata = await sock.groupMetadata(jid);
-                                const groupName = groupMetadata.subject;
-
-                                console.log(`[${nomeSessao}] Link de ativação detectado no grupo '${groupName}' (${jid}).`);
-
+                                console.log(`[${nomeSessao}] Link de ativação detectado.`);
+                                
+                                // Envia solicitação ao servidor
                                 socket.emit('group-activation-request', {
                                     groupId: jid,
-                                    groupName: groupName,
+                                    groupName: groupMetadata.subject,
                                     activationToken: token,
                                     botSessionName: nomeSessao
                                 });
@@ -279,61 +305,84 @@ async function ligarBot() {
                     }
                 }
             } catch (e) {
-                console.error(`[${nomeSessao}] Erro ao processar link de ativação:`, e);
+                console.error(`[${nomeSessao}] Erro link ativação:`, e);
             }
         }
 
+        // --- VALIDAÇÃO DE TIPO DE BOT (INDIVIDUAL VS GRUPO) ---
         if (botType === 'group') {
-            if (!isGroup) return;
-            if (!authorizedGroups[jid]) return;
+            if (!isGroup) return; 
+            if (!authorizedGroups[jid]) return; 
+
             const expiresAt = authorizedGroups[jid];
-            if (expiresAt && new Date() > expiresAt) return;
+            if (expiresAt && new Date() > expiresAt) {
+                return;
+            }
         } else {
-            if (isGroup) return;
+            if (isGroup) return; 
         }
 
+        // --- CORREÇÃO DA LÓGICA DE PAUSA/INTERVENÇÃO ---
         if (msg.key.fromMe) {
-            console.log(`[${nomeSessao}] 🛑 Intervenção humana detectada. Pausando ${jid} por 5 min.`);
-            pausados[jid] = Date.now() + TEMPO_PAUSA_MS;
+            // Se for bot INDIVIDUAL, pausamos na intervenção
+            if (botType !== 'group') {
+                console.log(`[${nomeSessao}] 🛑 Intervenção humana detectada. Pausando ${jid} por 5 min.`);
+                pausados[jid] = Date.now() + TEMPO_PAUSA_MS;
+            }
+            // Se for bot de GRUPO, apenas ignoramos para não responder a si mesmo
             return;
         }
+
         if (pausados[jid] && Date.now() < pausados[jid]) {
             console.log(`[${nomeSessao}] ⏸️ Bot em pausa para ${jid} (Intervenção Humana).`);
             return;
         }
 
+        // --- VERIFICAÇÃO DE IGNORE LIST ---
         const pushName = msg.pushName || '';
-        const senderNumber = jid.split('@')[0];
+        const senderNumber = (msg.key.participant || msg.key.remoteJid).split('@')[0];
 
         let isIgnored = false;
         for (const identifier of ignoredIdentifiers) {
             if (identifier.type === 'name' && pushName && pushName.toLowerCase() === identifier.value.toLowerCase()) {
-                isIgnored = true;
-                break;
+                isIgnored = true; break;
             } else if (identifier.type === 'number' && senderNumber.endsWith(identifier.value)) {
-                isIgnored = true;
-                break;
+                isIgnored = true; break;
             }
         }
 
         if (isIgnored) {
-            console.log(`[${nomeSessao}] Mensagem de ${pushName || senderNumber} ignorada (Lista Negra).`);
+            console.log(`[${nomeSessao}] Ignorado: ${pushName || senderNumber}`);
             return;
         }
 
-        console.log(`[${nomeSessao}] ${pushName || senderNumber} diz: ${isAudio ? '[Áudio]' : texto.substring(0, 20)}...`);
+        console.log(`[${nomeSessao}] MSG de ${pushName || senderNumber}: ${isAudio ? '[Áudio]' : texto.substring(0, 30)}...`);
 
-        await sock.sendPresenceUpdate('composing', jid);
-        await delay(1000 + Math.random() * 1500);
+        // --- ENVIO DA RESPOSTA ---
+        // --- ENVIO DA RESPOSTA ---
+        try {
+            // 1. Marca a mensagem como lida (para forçar a atualização de status no WhatsApp)
+            await sock.readMessages([msg.key]);
 
-        const resposta = await processarComGemini(jid, isAudio ? audioBase64 : texto, isAudio);
+            // 2. Sempre mostra "Digitando...", pois a resposta será texto
+            await sock.sendPresenceUpdate('composing', jid);
 
-        if (resposta && resposta.trim()) {
-            await sock.sendMessage(jid, { text: resposta });
+            // 3. Delay para simular o tempo de digitação humana
+            await delay(3000 + Math.random() * 3000);
+
+            const resposta = await processarComGemini(jid, isAudio ? audioBase64 : texto, isAudio);
+
+            if (resposta && resposta.trim()) {
+                await sock.sendMessage(jid, { text: resposta }, { quoted: msg });
+            }
+        } catch (error) {
+            console.error(`[${nomeSessao}] Erro ao enviar mensagem:`, error);
+        } finally {
+            // 4. Para de digitar
+            await sock.sendPresenceUpdate('available', jid);
         }
-
-        await sock.sendPresenceUpdate('available', jid);
     });
 }
 
 ligarBot().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
+
