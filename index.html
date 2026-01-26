@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -25,6 +26,8 @@
             --bg-body: #121214;
             --bg-card: #202024;
             --bg-input: #121214;
+            --bg-element: #2c2c31;
+            
             --text-main: #e1e1e6;
             --text-muted: #a8a8b3;
             --border: #323238;
@@ -35,16 +38,17 @@
             
             --green: #04d361;
             --red: #f75a68;
-            --blue: #3294F8;
             --yellow: #FBA94C;
-            --cyan: #61dafb;
+            
+            --blue: #52525b;
+            --cyan: #e4e4e7;
+            
             --header-height: 60px;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); margin: 0; padding-bottom: 80px; }
         
-        /* Estilo da Barra de Atualização PWA */
         #pwa-update-bar {
             display: none;
             position: fixed;
@@ -84,7 +88,8 @@
         
         .input-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; font-size: 0.95rem; color: var(--text-main); }
         .help-text { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; display: block; line-height: 1.5; }
-        .example-link { color: var(--cyan); cursor: pointer; font-size: 0.8rem; text-decoration: underline; white-space: nowrap; }
+        .example-link { color: var(--text-muted); cursor: pointer; font-size: 0.8rem; text-decoration: underline; white-space: nowrap; transition: color 0.2s; }
+        .example-link:hover { color: var(--text-main); }
 
         header { position: sticky; top: 0; z-index: 100; background: rgba(32, 32, 36, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         .nav-bar { height: var(--header-height); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; position: relative; }
@@ -145,15 +150,15 @@
         .auth-wrapper { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: radial-gradient(circle at top, #2c2c35 0%, #121214 100%); }
         .auth-card { background: var(--bg-card); padding: 30px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
 
-        #bots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px; }
-        .bot-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+        #individual-bots-grid, #group-bots-grid, #groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px; }
+        .bot-card, .group-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
         .card-header { padding: 15px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .status-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 20px; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 5px; }
-        .st-online { background: rgba(4, 211, 97, 0.1); color: var(--green); border: 1px solid rgba(4, 211, 97, 0.2); }
+        .st-online, .st-active { background: rgba(4, 211, 97, 0.1); color: var(--green); border: 1px solid rgba(4, 211, 97, 0.2); }
         .st-offline { background: rgba(168, 168, 179, 0.1); color: var(--text-muted); border: 1px solid rgba(168, 168, 179, 0.2); }
-        .st-waiting { color: var(--blue); border: 1px solid var(--blue); }
-        .st-expired { color: var(--red); border: 1px solid var(--red); }
-        .st-inactive { color: var(--yellow); border: 1px solid var(--yellow); }
+        .st-waiting { color: var(--text-main); border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); }
+        .st-expired { background: rgba(247, 90, 104, 0.1); color: var(--red); border: 1px solid rgba(247, 90, 104, 0.2); }
+        .st-inactive, .st-pending { background: rgba(251, 169, 76, 0.1); color: var(--yellow); border: 1px solid rgba(251, 169, 76, 0.2); }
 
         .card-body { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; gap: 15px; }
         .progress-container { position: relative; margin-top: 5px; }
@@ -216,7 +221,7 @@
             border: 2px dashed #ccc;
         }
 
-        .action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+        .action-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px; }
         .icon-btn { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px 5px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 5px; transition: 0.2s; border: 1px solid transparent; text-decoration: none; }
         .icon-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.95); }
         .icon-btn i { font-size: 1.3rem; margin-bottom: 2px; }
@@ -224,15 +229,22 @@
         
         .btn-act-start { color: var(--green); }
         .btn-act-stop { color: var(--red); }
-        .btn-act-pay { color: var(--cyan); border-color: rgba(97, 218, 251, 0.2); background: rgba(97, 218, 251, 0.05); }
+        .btn-act-pay { color: var(--text-main); border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.05); }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
         .modal-content { background: var(--bg-card); padding: 25px; border-radius: 16px; width: 90%; max-width: 450px; border: 1px solid var(--border); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; overflow-y: auto; }
         @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(4, 211, 97, 0.7); }
+            70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(4, 211, 97, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(4, 211, 97, 0); }
+        }
+
         .form-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         
         .plan-option { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; }
-        .plan-option:hover { background: rgba(255,255,255,0.08); border-color: var(--cyan); }
+        .plan-option:hover { background: rgba(255,255,255,0.08); border-color: var(--text-main); }
         .plan-title { font-weight: 600; font-size: 1rem; color: var(--text-main); }
         .plan-desc { font-size: 0.75rem; color: #888; margin-top: 4px; }
         .plan-price { font-weight: 700; color: var(--green); font-size: 1.1rem; }
@@ -257,7 +269,7 @@
         .feedback-success { background: var(--green); color: #000; }
         .feedback-error { background: var(--red); color: #fff; }
 
-        .section-divider-title { font-size: 0.8rem; color: var(--cyan); margin: 20px 0 10px 0; border-bottom: 1px solid rgba(97, 218, 251, 0.2); padding-bottom: 5px; }
+        .section-divider-title { font-size: 0.8rem; color: var(--text-muted); margin: 20px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
         .admin-tools { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #333; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .admin-tools span { font-size: 0.75rem; color: #666; font-weight: bold; }
         .counter-wrapper { display: flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -396,20 +408,84 @@
         .btn-support:active {
             transform: scale(0.9);
         }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-input);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-top: 15px;
+        }
+        .checkbox-group input { width: auto; }
+        .checkbox-group label { margin: 0; font-weight: 600; font-size: 0.9rem; }
+        .checkbox-group .help-text { margin: 0; font-size: 0.8rem; }
+        .bot-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            background: var(--purple-dark);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+
+        /* --- NOVAS ABAS INTEGRADAS (SEGMENTED CONTROL) --- */
+        .tabs-nav {
+            display: flex;
+            background: #18181b; /* Fundo escuro para o container */
+            padding: 5px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 25px;
+            gap: 5px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-align: center;
+        }
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255,255,255,0.03);
+        }
+        .tab-btn.active {
+            color: var(--text-main);
+            background: var(--bg-card); /* Fundo de cartão para a aba ativa */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+        }
+        .tab-content {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
 
-    <!-- BARRA DE ATUALIZAÇÃO PWA -->
     <div id="pwa-update-bar">
         <span>Nova versão disponível!</span>
         <button id="pwa-update-btn">ATUALIZAR AGORA</button>
     </div>
 
-    <!-- FEEDBACK (TOAST) -->
     <div id="feedback-area"></div>
 
-    <!-- AUTHENTICATION -->
     <div id="auth-section" class="auth-wrapper">
         <div class="auth-card">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -425,7 +501,7 @@
                 </form>
                 <div class="auth-divider"><span>ou continue com</span></div>
                 <a href="/auth/google" class="btn-google"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg> Google</a>
-                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">Não tem conta? <a href="#" style="color: var(--blue); text-decoration: none;" onclick="toggleAuthForms()">Crie aqui</a></p>
+                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">Não tem conta? <a href="#" style="color: var(--text-main); text-decoration: none;" onclick="toggleAuthForms()">Crie aqui</a></p>
             </div>
             <div id="register-form-container" class="hidden">
                 <form id="register-form">
@@ -440,7 +516,6 @@
         </div>
     </div>
 
-    <!-- MAIN DASHBOARD -->
     <div id="dashboard-container" class="hidden">
         <header>
             <div class="nav-bar">
@@ -455,7 +530,6 @@
             </div>
         </header>
         <div class="container">
-            <!-- PAINEL DE ADMINISTRAÇÃO -->
             <div id="admin-panel" class="hidden">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
                     <h3 style="margin:0;">Painel de Controle (Admin)</h3>
@@ -468,11 +542,11 @@
                     <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 10px;">Acesse sua área pessoal de criação de robôs ilimitados.</p>
                 </div>
 
-                <div class="form-section" style="border-color: var(--cyan);">
-                    <h4 style="color: var(--cyan); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
+                <div class="form-section" style="border-color: var(--border);">
+                    <h4 style="color: var(--text-main); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
                     <form id="admin-settings-form">
                         <div class="input-group"><label class="input-label">Token MercadoPago (Produção)</label><input type="text" id="mp-access-token" placeholder="APP_USR-xxxxxxxx..." required></div>
-                        <div class="section-divider-title">Preços Renovação (Individual)</div>
+                        <div class="section-divider-title">Preços Renovação (Individual & Grupos)</div>
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                             <div><label style="font-size:0.75rem; color:#888;">Mensal (R$)</label><input type="number" id="price-monthly" step="0.01"></div>
                             <div><label style="font-size:0.75rem; color:#888;">Trimestral (R$)</label><input type="number" id="price-quarterly" step="0.01"></div>
@@ -486,7 +560,7 @@
                             <div><label style="font-size:0.75rem; color:#888;">Lote 20 Bots</label><input type="number" id="price-resell-20" step="0.01"></div>
                             <div><label style="font-size:0.75rem; color:#888;">Lote 30 Bots</label><input type="number" id="price-resell-30" step="0.01"></div>
                         </div>
-                        <button type="submit" class="btn-primary" style="background: var(--cyan); color: #000; margin-top: 10px;">Salvar Alterações</button>
+                        <button type="submit" class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 10px;">Salvar Alterações</button>
                     </form>
                 </div>
                 <div class="form-section">
@@ -497,21 +571,58 @@
                 </div>
             </div>
 
-            <!-- VIEW DO USUÁRIO -->
             <div id="user-view">
                 <div id="view-header" style="margin: 15px 0;">
-                    <h2 id="main-title-text" style="font-size: 1.2rem; margin: 0;">Meus Robôs</h2>
-                    <p id="sub-title-text" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Aqui você cria e controla seus atendentes virtuais.</p>
+                    <h2 id="main-title-text" style="font-size: 1.2rem; margin: 0;">Painel de Controle</h2>
+                    <p id="sub-title-text" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Gerencie seus robôs e grupos.</p>
                 </div>
-                <div class="form-section">
-                    <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> <span id="add-bot-label">Criar Novo Robô</span></h4>
-                    <form id="add-bot-form">
-                        <div class="input-group"><label for="sessionName" class="input-label">1. Nome de Identificação</label><span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span><input type="text" id="sessionName" required placeholder="Ex: Bot_Vendas_01"></div>
-                        <div class="input-group"><label for="prompt" class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt()">Ver Exemplo</span></label><span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span><textarea id="prompt" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea></div>
-                        <button type="submit" class="btn-primary" id="create-bot-btn">Salvar e Criar Robô</button>
-                    </form>
+
+                <!-- TABS NAVIGATION -->
+                <div class="tabs-nav">
+                    <button class="tab-btn active" onclick="openTab('individual')" id="tab-btn-individual">
+                        <i class="fas fa-robot"></i> Atendimento (Individual)
+                    </button>
+                    <button class="tab-btn" onclick="openTab('groups')" id="tab-btn-groups">
+                        <i class="fas fa-users"></i> Gestão de Grupos
+                    </button>
                 </div>
-                <div id="bots-grid"></div>
+
+                <!-- TAB CONTENT: INDIVIDUAL BOTS -->
+                <div id="tab-content-individual" class="tab-content">
+                    <div class="form-section">
+                        <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> <span id="add-bot-label-ind">Criar Robô de Atendimento</span></h4>
+                        <form id="add-bot-form-individual">
+                            <div class="input-group"><label class="input-label">1. Nome de Identificação</label><span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span><input type="text" id="sessionName-ind" required placeholder="Ex: Bot_Vendas_01"></div>
+                            <div class="input-group"><label class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt('ind')">Ver Exemplo</span></label><span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span><textarea id="prompt-ind" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea></div>
+                            <button type="submit" class="btn-primary" id="create-bot-btn-ind" style="margin-top: 20px;">Salvar e Criar Robô</button>
+                        </form>
+                    </div>
+                    <div id="individual-bots-grid"></div>
+                </div>
+
+                <!-- TAB CONTENT: GROUP BOTS -->
+                <div id="tab-content-groups" class="tab-content hidden">
+                    <div class="form-section" style="border-color: var(--blue);">
+                        <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; color: var(--text-main);"><i class="fas fa-plus-circle"></i> <span id="add-bot-label-grp">Criar Robô para Grupos</span></h4>
+                        <form id="add-bot-form-group">
+                            <div class="input-group"><label class="input-label">1. Nome de Identificação</label><span class="help-text">Nome para identificar o bot gerenciador de grupos.</span><input type="text" id="sessionName-grp" required placeholder="Ex: Bot_Grupos_01"></div>
+                            <div class="input-group"><label class="input-label">2. Instruções do Grupo <span class="example-link" onclick="fillExamplePrompt('grp')">Ver Exemplo</span></label><span class="help-text">Como o bot deve se comportar nos grupos?</span><textarea id="prompt-grp" rows="6" required placeholder="Ex: Você é um moderador de grupo..."></textarea></div>
+                            <button type="submit" class="btn-primary" id="create-bot-btn-grp" style="margin-top: 20px; background: var(--blue);">Salvar e Criar Robô de Grupo</button>
+                        </form>
+                    </div>
+
+                    <div class="section-divider-title">Robôs Gerenciadores de Grupos</div>
+                    <div id="group-bots-grid"></div>
+
+                    <div id="groups-section" style="margin-top: 40px;">
+                        <div id="view-header-groups" style="margin-bottom: 15px;">
+                            <h3 style="font-size: 1.1rem; margin: 0;">Grupos Conectados (WhatsApp)</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Lista de grupos onde seus bots estão ativos.</p>
+                        </div>
+                        <div id="groups-grid"></div>
+                    </div>
+                </div>
+
                 <div id="user-logs-area" class="hidden" style="margin-top: 30px;">
                     <h4>Histórico de Atividades</h4>
                     <div id="user-log-content" class="logs-container" style="height: 150px; color: #ccc;"></div>
@@ -520,14 +631,14 @@
         </div>
     </div>
 
-    <!-- MODAIS -->
     <div id="edit-modal" class="modal-overlay">
         <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><h3>Editar Personalidade</h3><i class="fas fa-times" onclick="closeEditModal()" style="padding:10px; cursor:pointer;"></i></div>
-            <p style="color:#aaa; font-size:0.85rem; margin-bottom:10px;">Altere como o robô responde às mensagens.</p>
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><h3>Editar Robô</h3><i class="fas fa-times" onclick="closeEditModal()" style="padding:10px; cursor:pointer;"></i></div>
             <form id="edit-bot-form">
                 <input type="hidden" id="edit-sessionName-hidden">
+                <label class="input-label">Nome de Identificação</label>
                 <input type="text" id="edit-sessionName-display" disabled style="opacity: 0.5; margin-bottom:15px; width:100%; padding:10px; border:1px solid #333; background:#111; color:#777; border-radius:6px;">
+                <label class="input-label">Personalidade</label>
                 <textarea id="edit-prompt" rows="8" required style="font-family: sans-serif;"></textarea>
                 <button type="submit" class="btn-primary" style="margin-top:10px;">Salvar Alterações</button>
             </form>
@@ -557,7 +668,6 @@
         </div>
     </div>
 
-    <!-- Modal Pairing Code -->
     <div id="pairing-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -577,12 +687,13 @@
         </div>
     </div>
 
-    <!-- Modal Pay -->
     <div id="payment-modal" class="modal-overlay">
         <div class="modal-content text-center">
             <i class="fas fa-times" onclick="closePaymentModal()" style="position:absolute; right:20px; top:20px; padding:10px; cursor:pointer;"></i>
-            <h3 style="color: var(--cyan);">Renovar Acesso</h3>
-            <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 20px;">Robô: <strong id="pay-session-name" style="color: white;"></strong></p>
+            <h3 style="color: var(--text-main);">Renovar Acesso</h3>
+            <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 20px;">
+                <span id="payment-target-label">Robô</span>: <strong id="pay-session-name" style="color: white;"></strong>
+            </p>
             
             <div id="pay-step-select">
                 <p style="color:#e1e1e6; margin-bottom:15px; font-weight:600;">Por quanto tempo deseja renovar?</p>
@@ -590,7 +701,7 @@
             </div>
 
             <div id="pix-loading" class="hidden payment-success-container" style="padding: 40px 0;">
-                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--cyan);"></i>
+                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--text-main);"></i>
                 <p style="margin-top: 15px;">Gerando código Pix...</p>
             </div>
 
@@ -603,7 +714,7 @@
 
                 <div class="copy-row">
                     <input type="text" id="pix-copy-paste" readonly class="input-copy">
-                    <button onclick="copyPixCode('pix-copy-paste')" class="btn-copy" style="background: var(--cyan);">Copiar</button>
+                    <button onclick="copyPixCode('pix-copy-paste')" class="btn-copy" style="background: var(--text-main); color: #000;">Copiar</button>
                 </div>
 
                 <button onclick="sharePixPayment('individual')" class="btn-share-pix">
@@ -616,7 +727,6 @@
         </div>
     </div>
 
-    <!-- Modal REVENDA -->
     <div id="resell-modal" class="modal-overlay">
         <div class="modal-content text-center">
             <i class="fas fa-times" onclick="document.getElementById('resell-modal').style.display='none'" style="position:absolute; right:20px; top:20px; padding:10px; cursor:pointer;"></i>
@@ -653,7 +763,28 @@
         </div>
     </div>
 
-    <!-- BOTÃO DE SUPORTE -->
+    <div id="activation-link-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; color: var(--text-main);">Link de Ativação de Grupo</h3>
+                <i class="fas fa-times" onclick="document.getElementById('activation-link-modal').style.display='none'" style="padding:10px; cursor:pointer;"></i>
+            </div>
+            <p class="help-text" style="margin-bottom: 20px;">Siga os passos abaixo para ativar seu grupo:</p>
+            <ol style="font-size: 0.9rem; line-height: 1.7; padding-left: 20px; color: var(--text-muted);">
+                <li style="margin-bottom: 10px;">Adicione o número deste bot ('<strong id="modal-bot-name"></strong>') ao grupo do WhatsApp.</li>
+                <li style="margin-bottom: 10px;">Clique no botão abaixo para copiar o link de ativação único.</li>
+                <li style="margin-bottom: 10px;">Cole e envie este link como uma mensagem dentro do grupo que você deseja ativar.</li>
+            </ol>
+            <div class="input-group" style="margin-top: 25px;">
+                <label class="input-label">Seu Link Único (expira em 15 min)</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="activation-link-input" readonly style="background: var(--bg-input); opacity: 0.7;">
+                    <button id="copy-activation-link-btn" class="btn-primary" style="width: auto; padding: 0 20px; background: var(--blue);">Copiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <a href="https://wa.me/5511956087683" target="_blank" class="btn-support" title="Falar com Suporte">
         <i class="fab fa-whatsapp"></i>
     </a>
@@ -699,7 +830,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             if(urlParams.has('error')) {
                 const errorMsg = urlParams.get('error');
-                // CORREÇÃO: Filtra "Bad Request" para não assustar o usuário
                 if(errorMsg && errorMsg.trim() !== "" && errorMsg.toLowerCase() !== 'bad request') {
                     showFeedback(false, errorMsg);
                 }
@@ -785,9 +915,15 @@
             setTimeout(() => feedbackArea.style.display = 'none', 4000);
         }
 
-        function fillExamplePrompt() {
-            const example = "Você é o assistente virtual da Pizzaria. \n1. Seja educado.\n2. Cardápio: Pizza Queijo (R$30), Pizza Frango (R$35).";
-            document.getElementById('prompt').value = example;
+        function fillExamplePrompt(type) {
+            let example = "";
+            if(type === 'ind') {
+                example = "Você é o assistente virtual da Pizzaria. \n1. Seja educado.\n2. Cardápio: Pizza Queijo (R$30), Pizza Frango (R$35).";
+                document.getElementById('prompt-ind').value = example;
+            } else {
+                example = "Você é um moderador de grupo. \n1. Dê boas vindas aos novos membros.\n2. Avise sobre as regras: Sem spam.";
+                document.getElementById('prompt-grp').value = example;
+            }
         }
 
         function confirmLogout() {
@@ -813,6 +949,7 @@
                     document.getElementById('admin-panel').classList.add('hidden');
                     document.getElementById('user-view').classList.remove('hidden');
                     socket.emit('get-my-bots');
+                    socket.emit('get-my-groups');
                 }
                 socket.emit('get-public-prices');
             });
@@ -824,7 +961,16 @@
                 showFeedback(true, `Parabéns! Seu limite agora é de ${newLimit} robôs!`);
             });
 
-            socket.on('initial-bots-list', (bots) => { document.getElementById('bots-grid').innerHTML = ''; botsData = {}; bots.forEach(renderBotCard); });
+            socket.on('initial-bots-list', (bots) => { 
+                console.log('Bots recebidos:', bots);
+                document.getElementById('individual-bots-grid').innerHTML = ''; 
+                document.getElementById('group-bots-grid').innerHTML = ''; 
+                botsData = {}; 
+                bots.forEach(renderBotCard); 
+            });
+            socket.on('initial-groups-list', (groups) => { document.getElementById('groups-grid').innerHTML = ''; groups.forEach(renderGroupCard); });
+            socket.on('group-list-updated', (groups) => { document.getElementById('groups-grid').innerHTML = ''; groups.forEach(renderGroupCard); });
+
             socket.on('bot-updated', (bot) => { 
                 if (!currentUser.isAdmin && bot.owner !== currentUser.username) return;
                 if (currentUser.isAdmin && viewedUser && bot.owner !== viewedUser) return;
@@ -834,11 +980,17 @@
                     return; 
                 }
 
-                const btn = document.getElementById('create-bot-btn');
-                if(btn.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
-                    btn.disabled = false;
-                    btn.innerHTML = 'Salvar e Criar Robô';
+                // Reset buttons
+                const btnInd = document.getElementById('create-bot-btn-ind');
+                const btnGrp = document.getElementById('create-bot-btn-grp');
+                
+                if(btnInd.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
+                    btnInd.disabled = false; btnInd.innerHTML = 'Salvar e Criar Robô';
                 }
+                if(btnGrp.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
+                    btnGrp.disabled = false; btnGrp.innerHTML = 'Salvar e Criar Robô de Grupo';
+                }
+
                 renderBotCard(bot); 
             });
             socket.on('bot-deleted', (d) => { const el = document.getElementById(`bot-${d.sessionName}`); if(el) el.remove(); });
@@ -848,6 +1000,12 @@
                     const l = document.createElement('div'); l.className='log-line'; l.textContent = `> ${d.message}`;
                     c.appendChild(l); c.scrollTop = c.scrollHeight;
                     sessionStorage.setItem(`log-${d.sessionName}`, c.innerHTML);
+                }
+
+                if (d.message && d.message.includes('Link de ativação detectado')) {
+                    console.log('Link detectado, atualizando lista de grupos...');
+                    socket.emit('get-my-groups');
+                    showFeedback(true, 'Novo grupo detectado! Atualizando lista...');
                 }
             });
             socket.on('admin-users-list', (users) => {
@@ -893,8 +1051,10 @@
             socket.on('feedback', (d) => {
                 if(!d.success && d.error === 'limit_reached') {
                     openResellModal();
-                    const btn = document.getElementById('create-bot-btn');
-                    btn.disabled = false; btn.innerHTML = 'Salvar e Criar Robô';
+                    const btnInd = document.getElementById('create-bot-btn-ind');
+                    const btnGrp = document.getElementById('create-bot-btn-grp');
+                    btnInd.disabled = false; btnInd.innerHTML = 'Salvar e Criar Robô';
+                    btnGrp.disabled = false; btnGrp.innerHTML = 'Salvar e Criar Robô de Grupo';
                 } else {
                     showFeedback(d.success, d.message);
                 }
@@ -918,12 +1078,19 @@
             document.getElementById('nav-placeholder').classList.add('hidden');
             document.getElementById('main-title-text').textContent = user.username;
             document.getElementById('sub-title-text').textContent = `Gerenciando bots deste usuário`;
-            document.getElementById('add-bot-label').textContent = 'Criar Bot para este usuário';
+            document.getElementById('add-bot-label-ind').textContent = 'Criar Bot para este usuário';
             document.getElementById('user-logs-area').classList.remove('hidden');
             const logC = document.getElementById('user-log-content'); logC.innerHTML = '';
             if(user.log) user.log.slice().reverse().forEach(l => logC.innerHTML += `<div class="log-line">${l}</div>`);
-            document.getElementById('bots-grid').innerHTML = '';
+            document.getElementById('individual-bots-grid').innerHTML = '';
+            document.getElementById('group-bots-grid').innerHTML = '';
+            
+            // Solicita bots E grupos do usuário
             socket.emit('admin-get-bots-for-user', { username: user.username });
+            socket.emit('admin-get-groups-for-user', { username: user.username });
+            
+            // Reset tabs to default for admin view
+            openTab('individual');
         }
 
         function goToMyBotsAdmin() {
@@ -934,10 +1101,12 @@
             document.getElementById('nav-placeholder').classList.add('hidden');
             document.getElementById('main-title-text').textContent = "Meus Robôs (Admin)";
             document.getElementById('sub-title-text').textContent = "Criação de bots ilimitada para administração.";
-            document.getElementById('add-bot-label').textContent = 'Criar Novo Robô';
+            document.getElementById('add-bot-label-ind').textContent = 'Criar Novo Robô';
             document.getElementById('user-logs-area').classList.remove('hidden');
-            document.getElementById('bots-grid').innerHTML = '';
+            document.getElementById('individual-bots-grid').innerHTML = '';
+            document.getElementById('group-bots-grid').innerHTML = '';
             socket.emit('get-my-bots');
+            openTab('individual');
         }
 
         function goBackToAdminHome() {
@@ -946,7 +1115,23 @@
             document.getElementById('admin-panel').classList.remove('hidden');
             document.getElementById('nav-back-btn').classList.add('hidden');
             document.getElementById('nav-placeholder').classList.remove('hidden');
-            document.getElementById('bots-grid').innerHTML = '';
+            document.getElementById('individual-bots-grid').innerHTML = '';
+            document.getElementById('group-bots-grid').innerHTML = '';
+            document.getElementById('groups-grid').innerHTML = '';
+        }
+
+        function openTab(tabName) {
+            // Hide all content
+            document.getElementById('tab-content-individual').classList.add('hidden');
+            document.getElementById('tab-content-groups').classList.add('hidden');
+            
+            // Remove active class from buttons
+            document.getElementById('tab-btn-individual').classList.remove('active');
+            document.getElementById('tab-btn-groups').classList.remove('active');
+            
+            // Show selected content and activate button
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tabName}`).classList.add('active');
         }
 
         function formatDate(isoString) {
@@ -974,19 +1159,24 @@
             let isExpired = false;
             let daysForInput = 0;
 
-            if(!bot.activated) {
-                statusClass = 'st-inactive'; icon='fa-hourglass-start'; txt='Aguardando QR';
-                timeText = 'Aguardando leitura do QR Code';
-            } else {
-                const now = new Date();
-                const expireDate = new Date(bot.trialExpiresAt);
+            const isGroupBot = bot.botType === 'group';
+
+            const now = new Date();
+            const expireDate = new Date(bot.trialExpiresAt);
+            isExpired = expireDate < now;
+
+            if(bot.status === 'Online') { statusClass='st-online'; icon='fa-check'; txt='Conectado'; }
+            else if(bot.status.includes('Iniciando')) { statusClass='st-starting'; icon='fa-sync fa-spin'; txt='Iniciando...'; }
+            else if(bot.status.includes('Aguardando')) { statusClass='st-waiting'; icon='fa-qrcode'; txt='Ler QR Code'; }
+            else if(isExpired && !isGroupBot) { statusClass='st-expired'; icon='fa-times'; txt='Expirado'; }
+            else if(!bot.activated) { statusClass = 'st-inactive'; icon='fa-hourglass-start'; txt='Aguardando QR'; }
+
+            if (!isGroupBot) {
                 const totalDuration = 31 * 24 * 60 * 60 * 1000;
                 const timeLeft = expireDate - now;
                 
                 daysForInput = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
                 if (daysForInput < 0) daysForInput = 0;
-
-                isExpired = timeLeft <= 0;
                 
                 if (bot.isTrial && !isExpired) {
                     pct = 100; 
@@ -996,14 +1186,9 @@
                     pct = Math.max(0, Math.min(100, (timeLeft/totalDuration)*100));
                     timeText = isExpired ? 'Plano Expirado' : `${daysLeft} dias restantes`;
                 }
-                
-                if(bot.status === 'Online') { statusClass='st-online'; icon='fa-check'; txt='Conectado'; }
-                else if(bot.status.includes('Iniciando')) { statusClass='st-starting'; icon='fa-sync fa-spin'; txt='Iniciando...'; }
-                else if(bot.status.includes('Aguardando')) { statusClass='st-waiting'; icon='fa-qrcode'; txt='Ler QR Code'; }
-                else if(isExpired) { statusClass='st-expired'; icon='fa-times'; txt='Expirado'; }
             }
 
-            const adminTools = currentUser.isAdmin ? `
+            const adminTools = currentUser.isAdmin && !isGroupBot ? `
                 <div class="admin-tools">
                     <span>ADMIN DIAS:</span>
                     <div style="display:flex; gap:10px; align-items:center;">
@@ -1023,14 +1208,7 @@
                     const code = bot.qr.replace('PAIRING_CODE:', '');
                     qrSection = `
                         <div class="qr-area">
-                            <div class="qr-instructions">
-                                <strong>Conectar com Código:</strong>
-                                <ol>
-                                    <li>No WhatsApp > Aparelhos Conectados</li>
-                                    <li>Conectar um aparelho</li>
-                                    <li>Toque em "Conectar com número de telefone"</li>
-                                </ol>
-                            </div>
+                            <div class="qr-instructions"><strong>Conectar com Código:</strong><ol><li>No WhatsApp > Aparelhos Conectados</li><li>Conectar um aparelho</li><li>Toque em "Conectar com número de telefone"</li></ol></div>
                             <div class="pairing-code-display">${code}</div>
                             <p style="font-size:0.8rem; color:#666;">Digite este código no seu celular.</p>
                         </div>
@@ -1038,22 +1216,10 @@
                 } else {
                     qrSection = `
                         <div class="qr-area">
-                            <div class="qr-instructions">
-                                <strong>Conectar WhatsApp:</strong>
-                                <ol>
-                                    <li>Abra o WhatsApp e toque no menu <strong><i class="fas fa-ellipsis-v"></i> (Android)</strong> ou <strong>Configurações (iPhone)</strong>.</li>
-                                    <li>Toque em <strong>Aparelhos Conectados</strong>.</li>
-                                    <li>Toque em <strong>Conectar um aparelho</strong>.</li>
-                                    <li>Aponte a câmera para o QR Code abaixo.</li>
-                                </ol>
-                            </div>
+                            <div class="qr-instructions"><strong>Conectar WhatsApp:</strong><ol><li>Abra o WhatsApp e vá em <strong>Aparelhos Conectados</strong>.</li><li>Toque em <strong>Conectar um aparelho</strong>.</li><li>Aponte a câmera para o QR Code abaixo.</li></ol></div>
                             <div class="qr-tgt" id="qr-tgt-${bot.sessionName}"></div>
-                            <button class="btn-share-qr" onclick="shareQrCode('${bot.sessionName}')">
-                                <i class="fas fa-share-alt"></i> Compartilhar QR
-                            </button>
-                            <button class="btn-use-code" onclick="openPairingModal('${bot.sessionName}')">
-                                <i class="fas fa-mobile-alt"></i> Conectar com Número
-                            </button>
+                            <button class="btn-share-qr" onclick="shareQrCode('${bot.sessionName}')"><i class="fas fa-share-alt"></i> Compartilhar QR</button>
+                            <button class="btn-use-code" onclick="openPairingModal('${bot.sessionName}')"><i class="fas fa-mobile-alt"></i> Conectar com Número</button>
                         </div>
                     `;
                 }
@@ -1068,29 +1234,35 @@
                 toggleBtnHtml = `<button class="icon-btn btn-act-start" onclick="sock('start-bot','${bot.sessionName}')"><i class="fas fa-play"></i><span>Iniciar</span></button>`;
             }
 
+            // --- NOVA LÓGICA DO BOTÃO DE ATIVAÇÃO DE GRUPO ---
+            const groupActivationButton = isGroupBot ? `
+                <button class="btn-primary" style="background: var(--blue); color: white; margin-top: 15px;" onclick="openGroupActivationModal('${bot.sessionName}')">
+                    <i class="fas fa-link"></i> Ativar Grupo com este Bot
+                </button>
+            ` : '';
+
             const html = `
                 <div class="card-header">
-                    <div style="display:flex; align-items:center; gap:8px;"><i class="fas fa-robot" style="color:var(--primary);"></i><span style="font-weight:600;">${bot.sessionName}</span></div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fas ${isGroupBot ? 'fa-users' : 'fa-robot'}" style="color:var(--primary);"></i>
+                        <span style="font-weight:600;">${bot.sessionName}</span>
+                        ${isGroupBot ? '<span class="bot-tag">MODO GRUPO</span>' : ''}
+                    </div>
                     <div class="status-badge ${statusClass}"><i class="fas ${icon}"></i> ${txt}</div>
                 </div>
                 <div class="card-body">
+                    ${!isGroupBot ? `
                     <div class="progress-container">
                         <div class="progress-info">
                             <span>Status</span><span style="color:${isExpired ? 'var(--red)' : 'var(--text-main)'}">${timeText}</span>
                         </div>
                         <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%; background:${isExpired ? 'var(--red)' : 'var(--primary)'}"></div></div>
                     </div>
-                    
                     <div style="border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px;">
-                        <div class="date-info">
-                            <span>Criado em:</span>
-                            <strong>${formatDate(bot.createdAt)}</strong>
-                        </div>
-                        <div class="date-info">
-                            <span>Vence em:</span>
-                            <strong style="color: ${isExpired ? 'var(--red)' : 'var(--text-main)'}">${formatDate(bot.trialExpiresAt)}</strong>
-                        </div>
+                        <div class="date-info"><span>Criado em:</span><strong>${formatDate(bot.createdAt)}</strong></div>
+                        <div class="date-info"><span>Vence em:</span><strong style="color: ${isExpired ? 'var(--red)' : 'var(--text-main)'}">${formatDate(bot.trialExpiresAt)}</strong></div>
                     </div>
+                    ` : `<p class="help-text" style="text-align:center;">Este bot precisa ser conectado para poder gerenciar os grupos.</p>`}
 
                     ${qrSection}
                     <div class="logs-container">
@@ -1098,23 +1270,32 @@
                             <span>TERMINAL</span> <span onclick="clearLogs('${bot.sessionName}')" style="cursor:pointer; font-size:0.65rem; text-decoration:underline;">Limpar</span>
                         </div>
                     </div>
-                    <div class="action-grid">
+                    <div class="action-grid" style="grid-template-columns: repeat(${isGroupBot ? 3 : 5}, 1fr);">
                         ${toggleBtnHtml}
                         <button class="icon-btn" onclick="openEdit('${bot.sessionName}')"><i class="fas fa-pen"></i><span>Editar</span></button>
-                        <button class="icon-btn" onclick="openIgnoreModal('${bot.sessionName}')"><i class="fas fa-user-slash"></i><span>Ignorar</span></button>
-                        <button class="icon-btn btn-act-pay" onclick="openPay('${bot.sessionName}')"><i class="fas fa-bolt"></i><span>Renovar</span></button>
+                        ${!isGroupBot ? `<button class="icon-btn" onclick="openIgnoreModal('${bot.sessionName}')"><i class="fas fa-user-slash"></i><span>Ignorar</span></button>` : ''}
+                        ${!isGroupBot ? `<button class="icon-btn btn-act-pay" onclick="openPay('${bot.sessionName}')"><i class="fas fa-bolt"></i><span>Renovar</span></button>` : ''}
                         <button class="icon-btn" onclick="delBot('${bot.sessionName}')"><i class="fas fa-trash"></i> <span>Excluir</span></button>
                     </div>
+                    ${groupActivationButton}
                     ${adminTools}
                 </div>
             `;
 
             if(!card) {
                 card = document.createElement('div'); card.className = 'bot-card'; card.id = `bot-${bot.sessionName}`;
-                document.getElementById('bots-grid').prepend(card);
+                
+                // DECIDE ONDE INSERIR O CARD BASEADO NO TIPO
+                if(isGroupBot) {
+                    document.getElementById('group-bots-grid').prepend(card);
+                } else {
+                    document.getElementById('individual-bots-grid').prepend(card);
+                }
+            } else {
+                // Se o card já existe, apenas atualiza o HTML
+                card.innerHTML = html;
             }
-            card.innerHTML = html;
-
+            
             const svLogs = sessionStorage.getItem(`log-${bot.sessionName}`);
             const logC = card.querySelector('.logs-container');
             if(svLogs) { 
@@ -1125,8 +1306,6 @@
                 if(qt) { 
                     qt.innerHTML=''; 
                     new QRCode(qt, {text:bot.qr, width:180, height:180}); 
-                    
-                    // Auto-scroll logic: Scroll only if status just changed to Waiting QR
                     if (prevStatus !== 'Aguardando QR Code') {
                         setTimeout(() => {
                             qt.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1136,21 +1315,96 @@
             }
         }
 
-        function dataURItoBlob(dataURI) {
-            var byteString;
-            if (dataURI.split(',')[0].indexOf('base64') >= 0)
-                byteString = atob(dataURI.split(',')[1]);
-            else
-                byteString = unescape(dataURI.split(',')[1]);
+        function renderGroupCard(group) {
+            let card = document.getElementById(`group-${group.groupId}`);
+            
+            let statusClass, statusIcon, statusText;
+            const now = new Date();
+            const expiresAt = group.expiresAt ? new Date(group.expiresAt) : null;
+            const isExpired = expiresAt && expiresAt < now;
 
-            var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            let actionButton = '';
 
-            var ia = new Uint8Array(byteString.length);
-            for (var i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
+            switch(group.status) {
+                case 'active':
+                    if (isExpired) {
+                        statusClass = 'st-expired'; statusIcon = 'fa-times-circle'; statusText = 'Expirado';
+                        actionButton = `
+                        <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                            <i class="fas fa-bolt"></i> Renovar Assinatura
+                        </button>`;
+                    } else {
+                        statusClass = 'st-active'; statusIcon = 'fa-check-circle'; statusText = 'Ativo';
+                        actionButton = `
+                        <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                            <i class="fas fa-bolt"></i> Estender Assinatura
+                        </button>`;
+                    }
+                    break;
+                case 'pending_payment':
+                    statusClass = 'st-pending'; statusIcon = 'fa-hourglass-half'; statusText = 'Pendente';
+                    actionButton = `
+                    <button class="btn-primary" style="background: var(--green); color: #fff; margin-top: 20px; animation: pulse 2s infinite;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                        <i class="fas fa-unlock"></i> LIBERAR ACESSO (PAGAR)
+                    </button>`;
+                    break;
+                default:
+                    statusClass = 'st-offline'; statusIcon = 'fa-question-circle'; statusText = 'Desconhecido';
+                    actionButton = `
+                    <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                        <i class="fas fa-bolt"></i> Pagar / Renovar
+                    </button>`;
             }
 
-            return new Blob([ia], {type:mimeString});
+            // --- BOTÃO DE REMOVER GRUPO ---
+            const deleteBtn = `
+                <button class="btn-delete-group" onclick="deleteGroup('${group.groupId}', '${group.groupName}')" style="background: transparent; border: 1px solid var(--red); color: var(--red); width: 100%; padding: 10px; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: 600; transition: 0.2s;">
+                    <i class="fas fa-trash"></i> Remover Grupo
+                </button>
+            `;
+
+            const html = `
+                <div class="card-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fab fa-whatsapp" style="color:var(--green);"></i>
+                        <span style="font-weight:600;" class="text-truncate">${group.groupName}</span>
+                    </div>
+                    <div class="status-badge ${statusClass}"><i class="fas ${statusIcon}"></i> ${statusText}</div>
+                </div>
+                <div class="card-body">
+                    <div class="date-info">
+                        <span>Adicionado em:</span>
+                        <strong>${formatDate(group.createdAt)}</strong>
+                    </div>
+                    <div class="date-info">
+                        <span>Vence em:</span>
+                        <strong style="color: ${isExpired ? 'var(--red)' : 'var(--text-main)'}">${formatDate(group.expiresAt)}</strong>
+                    </div>
+                    <div class="date-info" style="margin-top: 5px;">
+                        <span>Gerenciado por:</span>
+                        <strong>${group.managedByBot}</strong>
+                    </div>
+                    ${actionButton}
+                    ${deleteBtn}
+                </div>
+            `;
+
+            if (!card) {
+                card = document.createElement('div');
+                card.className = 'group-card';
+                card.id = `group-${group.groupId}`;
+                document.getElementById('groups-grid').prepend(card);
+            }
+            card.innerHTML = html;
+        }
+
+        function deleteGroup(groupId, groupName) {
+            if(confirm(`Tem certeza que deseja remover o grupo "${groupName}"?\n\nO bot deixará de responder neste grupo e as configurações serão perdidas.`)) {
+                socket.emit('delete-group', { groupId: groupId });
+                // Opcional: Remover visualmente imediatamente para feedback rápido
+                const card = document.getElementById(`group-${groupId}`);
+                if(card) card.style.opacity = '0.5';
+            }
         }
 
         async function shareQrCode(sessionName) {
@@ -1285,18 +1539,22 @@
         function clearLogs(n) { sessionStorage.removeItem(`log-${n}`); document.querySelector(`#bot-${n} .logs-container`).innerHTML='<div style="display:flex; justify-content:space-between; margin-bottom:5px; color:#666;"><span>TERMINAL</span><span onclick="clearLogs(\''+n+'\')" style="cursor:pointer; font-size:0.65rem; text-decoration:underline;">Limpar</span></div>'; }
         
         function openEdit(n) {
+            const bot = botsData[n];
             document.getElementById('edit-modal').style.display='flex';
             document.getElementById('edit-sessionName-hidden').value=n;
             document.getElementById('edit-sessionName-display').value=n;
-            document.getElementById('edit-prompt').value=botsData[n].prompt;
+            document.getElementById('edit-prompt').value=bot.prompt;
         }
         function closeEditModal() { document.getElementById('edit-modal').style.display='none'; }
         
         document.getElementById('edit-bot-form').onsubmit = (e) => { 
             e.preventDefault(); 
+            // Mantém o tipo original do bot
+            const originalBot = botsData[document.getElementById('edit-sessionName-hidden').value];
             socket.emit('update-bot', { 
                 sessionName: document.getElementById('edit-sessionName-hidden').value, 
-                newPrompt: document.getElementById('edit-prompt').value 
+                newPrompt: document.getElementById('edit-prompt').value,
+                botType: originalBot.botType
             }); 
             closeEditModal(); 
         };
@@ -1353,16 +1611,41 @@
             socket.emit('update-ignored-identifiers', { sessionName, ignoredIdentifiers: newList });
         }
 
-        document.getElementById('add-bot-form').onsubmit=(e)=>{
+        // HANDLER PARA CRIAR BOT INDIVIDUAL
+        document.getElementById('add-bot-form-individual').onsubmit=(e)=>{
             e.preventDefault(); 
-            const nInput = document.getElementById('sessionName');
-            const pInput = document.getElementById('prompt');
+            const nInput = document.getElementById('sessionName-ind');
+            const pInput = document.getElementById('prompt-ind');
             let n = nInput.value.trim().replace(/\s+/g,'_');
             if(n.length < 3) { alert('O nome deve ter 3 letras.'); return; }
             const o = (currentUser.isAdmin && viewedUser) ? viewedUser : currentUser.username;
-            const btn = document.getElementById('create-bot-btn');
+            const btn = document.getElementById('create-bot-btn-ind');
             btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
-            socket.emit('create-bot', { sessionName:n, prompt:pInput.value.trim(), owner:o });
+            socket.emit('create-bot', { 
+                sessionName:n, 
+                prompt:pInput.value.trim(), 
+                owner:o,
+                botType: 'individual'
+            });
+            nInput.value=''; pInput.value='';
+        };
+
+        // HANDLER PARA CRIAR BOT DE GRUPO
+        document.getElementById('add-bot-form-group').onsubmit=(e)=>{
+            e.preventDefault(); 
+            const nInput = document.getElementById('sessionName-grp');
+            const pInput = document.getElementById('prompt-grp');
+            let n = nInput.value.trim().replace(/\s+/g,'_');
+            if(n.length < 3) { alert('O nome deve ter 3 letras.'); return; }
+            const o = (currentUser.isAdmin && viewedUser) ? viewedUser : currentUser.username;
+            const btn = document.getElementById('create-bot-btn-grp');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+            socket.emit('create-bot', { 
+                sessionName:n, 
+                prompt:pInput.value.trim(), 
+                owner:o,
+                botType: 'group'
+            });
             nInput.value=''; pInput.value='';
         };
         
@@ -1382,11 +1665,22 @@
         };
 
         let currentPaySession = '';
-        function openPay(n) {
-            currentPaySession = n;
+        let currentPayGroup = '';
+        function openPay(sessionName = null, groupId = null, groupName = null) {
+            currentPaySession = sessionName;
+            currentPayGroup = groupId;
+
             const m = document.getElementById('payment-modal'); 
             m.style.display='flex';
-            document.getElementById('pay-session-name').innerText = n;
+            
+            if (groupId) {
+                document.getElementById('payment-target-label').innerText = 'Grupo';
+                document.getElementById('pay-session-name').innerText = groupName;
+            } else {
+                document.getElementById('payment-target-label').innerText = 'Robô';
+                document.getElementById('pay-session-name').innerText = sessionName;
+            }
+
             const container = document.getElementById('plans-container');
             container.innerHTML = '';
             const plans = [
@@ -1409,8 +1703,16 @@
         async function selectPlan(planType) {
             document.getElementById('pay-step-select').classList.add('hidden');
             document.getElementById('pix-loading').classList.remove('hidden');
+            
+            const payload = { planType: planType };
+            if (currentPayGroup) {
+                payload.groupId = currentPayGroup;
+            } else {
+                payload.sessionName = currentPaySession;
+            }
+
             try {
-                const res = await fetch('/api/create-payment', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ sessionName: currentPaySession, planType: planType }) });
+                const res = await fetch('/api/create-payment', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
                 const d = await res.json();
                 if(res.ok) {
                     document.getElementById('pix-loading').classList.add('hidden');
@@ -1460,10 +1762,54 @@
             } catch { alert('Erro conexão'); document.getElementById('resell-modal').style.display='none'; }
         }
 
-        function resetPaymentModal() { openPay(currentPaySession); }
+        function resetPaymentModal() { 
+            if (currentPayGroup) {
+                const groupName = document.getElementById('pay-session-name').innerText;
+                openPay(null, currentPayGroup, groupName);
+            } else {
+                openPay(currentPaySession);
+            }
+        }
         function copyPixCode(id) { const el=document.getElementById(id); el.select(); navigator.clipboard.writeText(el.value); showFeedback(true, 'Código Pix Copiado!'); }
         function closePaymentModal() { document.getElementById('payment-modal').style.display='none'; }
         window.onclick = (e) => { if(e.target.className === 'modal-overlay') e.target.style.display='none'; };
+
+        // --- NOVA FUNÇÃO PARA ABRIR O MODAL DE ATIVAÇÃO ---
+        async function openGroupActivationModal(sessionName) {
+            const btn = document.querySelector(`#bot-${sessionName} .btn-primary`);
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const response = await fetch('/api/generate-activation-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ botSessionName: sessionName })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('modal-bot-name').textContent = sessionName;
+                    document.getElementById('activation-link-input').value = data.activationLink;
+                    document.getElementById('activation-link-modal').style.display = 'flex';
+                } else {
+                    showFeedback(false, data.error || 'Não foi possível gerar o link.');
+                }
+            } catch (error) {
+                showFeedback(false, 'Erro de conexão ao gerar o link.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        document.getElementById('copy-activation-link-btn').addEventListener('click', () => {
+            const input = document.getElementById('activation-link-input');
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            showFeedback(true, 'Link Copiado!');
+        });
     </script>
 </body>
 </html>
