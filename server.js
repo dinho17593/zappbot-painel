@@ -32,7 +32,6 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOG
 const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || "https://zappbot.shop/auth/google/callback";
 const SESSION_SECRET = process.env.SESSION_SECRET || 'sua-chave-secreta-muito-forte-e-diferente';
 
-// Armazenamento em memória para os tokens de ativação
 const activationTokens = {};
 
 app.set('trust proxy', true);
@@ -62,33 +61,10 @@ io.engine.use(sessionMiddleware);
 if (!fs.existsSync(AUTH_SESSIONS_DIR)) fs.mkdirSync(AUTH_SESSIONS_DIR, { recursive: true });
 if (!fs.existsSync(SESSION_FILES_DIR)) fs.mkdirSync(SESSION_FILES_DIR, { recursive: true });
 
-// --- FUNÇÕES DE BANCO DE DADOS CORRIGIDAS ---
-const readDB = (filePath) => {
-    try {
-        if (fs.existsSync(filePath)) {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            if (!content.trim()) return {}; // Retorna vazio se o arquivo estiver em branco
-            return JSON.parse(content);
-        }
-        return {};
-    } catch (e) {
-        console.error(`Erro ao ler DB (${filePath}):`, e);
-        return {};
-    }
-};
+const readDB = (filePath) => fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
+const writeDB = (filePath, data) => fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
-const writeDB = (filePath, data) => {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (e) {
-        console.error(`Erro ao escrever DB (${filePath}):`, e);
-    }
-};
-
-// --- INICIALIZAÇÃO DOS ARQUIVOS JSON ---
 if (!fs.existsSync(GROUPS_DB_PATH)) writeDB(GROUPS_DB_PATH, {});
-if (!fs.existsSync(BOTS_DB_PATH)) writeDB(BOTS_DB_PATH, {}); // CORREÇÃO: Cria bots.json se não existir
-if (!fs.existsSync(USERS_DB_PATH)) writeDB(USERS_DB_PATH, {}); // CORREÇÃO: Cria users.json se não existir
 
 function ensureFirstUserIsAdmin() {
     try {
@@ -193,11 +169,13 @@ app.post('/api/generate-activation-link', (req, res) => {
     }
 
     const token = crypto.randomUUID();
-    const ownerEmail = req.session.user.username;
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutos a partir de agora
+    // GARANTE QUE O EMAIL SEJA MINÚSCULO PARA EVITAR ERROS DE COMPARAÇÃO
+    const ownerEmail = req.session.user.username.toLowerCase();
+    const expiresAt = Date.now() + 15 * 60 * 1000; 
 
     activationTokens[token] = { ownerEmail, expiresAt };
 
+    // Limpeza de tokens antigos
     Object.keys(activationTokens).forEach(t => {
         if (activationTokens[t].expiresAt < Date.now()) {
             delete activationTokens[t];
@@ -205,7 +183,6 @@ app.post('/api/generate-activation-link', (req, res) => {
     });
 
     const activationLink = `https://zappbot.shop/ativar?token=${token}`;
-    
     res.json({ activationLink });
 });
 
@@ -265,8 +242,8 @@ app.post('/webhook/mercadopago', async (req, res) => {
                         users[referenceId].trialUsed = true;
                         users[referenceId].trialExpiresAt = "PAID_USER";
                         writeDB(USERS_DB_PATH, users);
-                        const sockets = await io.fetchSockets();
-                        sockets.forEach(s => { if (s.request.session.user?.username === referenceId) s.emit('update-limit', users[referenceId].botLimit); });
+                        // Notifica via Sala (minúsculo)
+                        io.to(referenceId.toLowerCase()).emit('update-limit', users[referenceId].botLimit);
                     }
                 } else if (paymentType === 'bot') {
                     const bots = readDB(BOTS_DB_PATH);
@@ -304,13 +281,9 @@ app.post('/webhook/mercadopago', async (req, res) => {
                         group.expiresAt = baseDate.toISOString();
                         writeDB(GROUPS_DB_PATH, groups);
 
-                        const sockets = await io.fetchSockets();
-                        sockets.forEach(s => {
-                            if (s.request.session.user?.username === group.owner) {
-                                s.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
-                                s.emit('feedback', { success: true, message: `Grupo "${group.groupName}" ativado com sucesso!` });
-                            }
-                        });
+                        // Notifica o dono via Sala (minúsculo)
+                        io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                        io.to(group.owner.toLowerCase()).emit('feedback', { success: true, message: `Grupo "${group.groupName}" ativado com sucesso!` });
 
                         const botSessionName = group.managedByBot;
                         if (activeBots[botSessionName]) {
@@ -446,10 +419,13 @@ io.use((socket, next) => {
     }
 });
 
-// Este bloco lida com eventos de clientes conectados via navegador (o painel)
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
     if (!user) { socket.disconnect(); return; }
+
+    // --- CORREÇÃO: Força minúsculo na sala ---
+    socket.join(user.username.toLowerCase());
+    // -----------------------------------------
 
     const uData = readDB(USERS_DB_PATH)[user.username];
     socket.emit('session-info', { username: user.username, isAdmin: user.isAdmin, botLimit: uData?.botLimit || 1 });
@@ -484,6 +460,48 @@ io.on('connection', (socket) => {
             }
         });
 
+        socket.on('admin-set-group-days', ({ groupId, days }) => {
+            const groups = readDB(GROUPS_DB_PATH);
+            const group = groups[groupId];
+
+            if (group) {
+                const d = parseInt(days);
+                const now = new Date();
+                
+                let baseDate = (group.expiresAt && new Date(group.expiresAt) > now) ? new Date(group.expiresAt) : new Date(now);
+                
+                if (d > 0 && (!group.expiresAt || new Date(group.expiresAt) < now)) {
+                    baseDate = new Date(now);
+                }
+
+                baseDate.setDate(baseDate.getDate() + d);
+                
+                group.expiresAt = baseDate.toISOString();
+                group.status = 'active'; 
+
+                writeDB(GROUPS_DB_PATH, groups);
+
+                // Notifica o dono via Sala (minúsculo)
+                io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                
+                socket.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                socket.emit('feedback', { success: true, message: 'Dias do grupo atualizados.' });
+
+                const botSessionName = group.managedByBot;
+                if (activeBots[botSessionName]) {
+                    console.log(`[ADMIN GROUP DAYS] Reiniciando bot ${botSessionName} para aplicar novos dias.`);
+                    activeBots[botSessionName].process.kill('SIGINT');
+                    delete activeBots[botSessionName];
+                    setTimeout(() => {
+                        const currentBots = readDB(BOTS_DB_PATH);
+                        if (currentBots[botSessionName]) {
+                            startBotProcess(currentBots[botSessionName]);
+                        }
+                    }, 1000);
+                }
+            }
+        });
+
         socket.on('admin-get-users', () => socket.emit('admin-users-list', Object.values(readDB(USERS_DB_PATH)).map(({ password, ...r }) => r)));
 
         socket.on('admin-delete-user', ({ username }) => {
@@ -494,17 +512,10 @@ io.on('connection', (socket) => {
         });
 
         socket.on('admin-get-bots-for-user', ({ username }) => socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === username)));
-        
-        socket.on('admin-get-groups-for-user', ({ username }) => {
-            socket.emit('initial-groups-list', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === username));
-        });
     }
 
     socket.on('get-my-bots', () => {
-        // CORREÇÃO: Garante que a comparação de dono seja case-insensitive
-        const allBots = Object.values(readDB(BOTS_DB_PATH));
-        const myBots = allBots.filter(b => b.owner.toLowerCase() === user.username.toLowerCase());
-        socket.emit('initial-bots-list', myBots);
+        socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username));
     });
 
     socket.on('get-my-groups', () => {
@@ -593,7 +604,7 @@ io.on('connection', (socket) => {
             sessionName: d.sessionName,
             prompt: d.prompt,
             status: 'Offline',
-            owner: owner.toLowerCase(), // CORREÇÃO: Salva sempre em minúsculo
+            owner,
             activated: false,
             isTrial: isTrial,
             createdAt: now.toISOString(),
@@ -722,6 +733,7 @@ io.on('connection', (socket) => {
     });
 });
 
+// --- CORREÇÃO CRUCIAL: Evento de Ativação de Grupo ---
 io.on('group-activation-request', ({ groupId, groupName, activationToken, botSessionName }) => {
     console.log(`[SERVIDOR] 1. Evento 'group-activation-request' recebido do bot ${botSessionName}.`);
     console.log(`[SERVIDOR]    - Token recebido: ${activationToken}`);
@@ -747,12 +759,8 @@ io.on('group-activation-request', ({ groupId, groupName, activationToken, botSes
     }
     if (groups[groupId]) {
         console.warn(`[SERVIDOR] AVISO: O grupo '${groupName}' (${groupId}) já existe no banco de dados.`);
-        const sockets = io.sockets.sockets;
-        for (const s of sockets.values()) {
-            if (s.request.session.user?.username === ownerEmail) {
-                s.emit('feedback', { success: false, message: `O grupo "${groupName}" já está na sua lista.` });
-            }
-        }
+        // Envia feedback direto para a sala do usuário (minúsculo)
+        io.to(ownerEmail.toLowerCase()).emit('feedback', { success: false, message: `O grupo "${groupName}" já está na sua lista.` });
         return;
     }
 
@@ -770,21 +778,10 @@ io.on('group-activation-request', ({ groupId, groupName, activationToken, botSes
     writeDB(GROUPS_DB_PATH, groups);
     console.log(`[SERVIDOR] 4. Grupo '${groupName}' salvo no groups.json.`);
 
-    let userSocketFound = false;
-    const connectedSockets = io.sockets.sockets;
-    for (const [socketId, s] of connectedSockets.entries()) {
-        if (s.request.session.user?.username === ownerEmail) {
-            console.log(`[SERVIDOR] 5. Socket do usuário ${ownerEmail} encontrado! Enviando atualização para o painel.`);
-            s.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
-            s.emit('feedback', { success: true, message: `Seu grupo "${groupName}" está pronto para ativação!` });
-            userSocketFound = true;
-            break;
-        }
-    }
-
-    if (!userSocketFound) {
-        console.warn(`[SERVIDOR] AVISO: O grupo foi criado, mas o usuário ${ownerEmail} não está com o painel aberto para receber a notificação em tempo real.`);
-    }
+    // --- AQUI ESTÁ A MÁGICA: Envia para a sala do usuário (minúsculo) ---
+    console.log(`[SERVIDOR] 5. Enviando atualização para a sala do usuário: ${ownerEmail.toLowerCase()}`);
+    io.to(ownerEmail.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
+    io.to(ownerEmail.toLowerCase()).emit('feedback', { success: true, message: `Seu grupo "${groupName}" está pronto para ativação!` });
 });
 
 
@@ -792,12 +789,14 @@ function startBotProcess(bot, phoneNumber = null) {
     const env = { ...process.env, API_KEYS_GEMINI: process.env.API_KEYS_GEMINI };
     const ignoredIdentifiersArg = JSON.stringify(bot.ignoredIdentifiers || []);
     
+    const phoneArg = phoneNumber ? phoneNumber : 'null';
+
     const args = [
         BOT_SCRIPT_PATH,
         bot.sessionName,
         bot.prompt,
         ignoredIdentifiersArg,
-        phoneNumber || 'null'
+        phoneArg,
     ];
 
     let authorizedGroupsArg = '[]';
