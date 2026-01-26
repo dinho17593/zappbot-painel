@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -26,8 +27,7 @@
             --bg-body: #121214;
             --bg-card: #202024;
             --bg-input: #121214;
-            --bg-element: #2c2c31;
-            
+            --bg-sidebar: #18181b;
             --text-main: #e1e1e6;
             --text-muted: #a8a8b3;
             --border: #323238;
@@ -38,16 +38,14 @@
             
             --green: #04d361;
             --red: #f75a68;
+            --blue: #3294F8;
             --yellow: #FBA94C;
-            
-            --blue: #52525b;
-            --cyan: #e4e4e7;
-            
+            --cyan: #61dafb;
             --header-height: 60px;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); margin: 0; padding-bottom: 80px; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: var(--text-main); margin: 0; padding-bottom: 80px; overflow-x: hidden; }
         
         #pwa-update-bar {
             display: none;
@@ -88,8 +86,7 @@
         
         .input-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; font-size: 0.95rem; color: var(--text-main); }
         .help-text { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; display: block; line-height: 1.5; }
-        .example-link { color: var(--text-muted); cursor: pointer; font-size: 0.8rem; text-decoration: underline; white-space: nowrap; transition: color 0.2s; }
-        .example-link:hover { color: var(--text-main); }
+        .example-link { color: var(--cyan); cursor: pointer; font-size: 0.8rem; text-decoration: underline; white-space: nowrap; }
 
         header { position: sticky; top: 0; z-index: 100; background: rgba(32, 32, 36, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         .nav-bar { height: var(--header-height); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; position: relative; }
@@ -117,6 +114,50 @@
         .brand-center i { color: var(--primary); }
         .user-strip { background: #18181b; border-bottom: 1px solid var(--border); padding: 8px 15px; text-align: center; font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: center; align-items: center; gap: 8px; }
         .limit-badge { background: var(--bg-card); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; color: var(--yellow); cursor: pointer; display: flex; align-items: center; gap: 5px; }
+
+        /* Sidebar Styles */
+        .sidebar-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 1000; display: none;
+            backdrop-filter: blur(3px);
+        }
+        .sidebar {
+            position: fixed; top: 0; left: -300px; width: 280px; height: 100%;
+            background: var(--bg-sidebar); border-right: 1px solid var(--border);
+            z-index: 1001; transition: left 0.3s ease;
+            display: flex; flex-direction: column;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
+        }
+        .sidebar.open { left: 0; }
+        .sidebar-header {
+            padding: 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        .sidebar-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+        
+        .sidebar-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 15px;
+            text-align: left;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sidebar-btn:hover, .sidebar-btn.active {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-main);
+        }
+        .sidebar-btn.active {
+            border-left: 3px solid var(--primary);
+        }
 
         input, textarea { width: 100%; padding: 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); font-size: 1rem; font-family: 'Inter', sans-serif; }
         input:focus, textarea:focus { border-color: var(--primary); }
@@ -150,13 +191,13 @@
         .auth-wrapper { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; background: radial-gradient(circle at top, #2c2c35 0%, #121214 100%); }
         .auth-card { background: var(--bg-card); padding: 30px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
 
-        #individual-bots-grid, #group-bots-grid, #groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px; }
+        #bots-grid, #groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px; }
         .bot-card, .group-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
         .card-header { padding: 15px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .status-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 20px; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 5px; }
         .st-online, .st-active { background: rgba(4, 211, 97, 0.1); color: var(--green); border: 1px solid rgba(4, 211, 97, 0.2); }
         .st-offline { background: rgba(168, 168, 179, 0.1); color: var(--text-muted); border: 1px solid rgba(168, 168, 179, 0.2); }
-        .st-waiting { color: var(--text-main); border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); }
+        .st-waiting { color: var(--blue); border: 1px solid rgba(49, 130, 206, 0.2); background: rgba(49, 130, 206, 0.1); }
         .st-expired { background: rgba(247, 90, 104, 0.1); color: var(--red); border: 1px solid rgba(247, 90, 104, 0.2); }
         .st-inactive, .st-pending { background: rgba(251, 169, 76, 0.1); color: var(--yellow); border: 1px solid rgba(251, 169, 76, 0.2); }
 
@@ -229,7 +270,7 @@
         
         .btn-act-start { color: var(--green); }
         .btn-act-stop { color: var(--red); }
-        .btn-act-pay { color: var(--text-main); border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.05); }
+        .btn-act-pay { color: var(--cyan); border-color: rgba(97, 218, 251, 0.2); background: rgba(97, 218, 251, 0.05); }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
         .modal-content { background: var(--bg-card); padding: 25px; border-radius: 16px; width: 90%; max-width: 450px; border: 1px solid var(--border); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; overflow-y: auto; }
@@ -244,7 +285,7 @@
         .form-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         
         .plan-option { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; }
-        .plan-option:hover { background: rgba(255,255,255,0.08); border-color: var(--text-main); }
+        .plan-option:hover { background: rgba(255,255,255,0.08); border-color: var(--cyan); }
         .plan-title { font-weight: 600; font-size: 1rem; color: var(--text-main); }
         .plan-desc { font-size: 0.75rem; color: #888; margin-top: 4px; }
         .plan-price { font-weight: 700; color: var(--green); font-size: 1.1rem; }
@@ -269,7 +310,7 @@
         .feedback-success { background: var(--green); color: #000; }
         .feedback-error { background: var(--red); color: #fff; }
 
-        .section-divider-title { font-size: 0.8rem; color: var(--text-muted); margin: 20px 0 10px 0; border-bottom: 1px solid var(--border); padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .section-divider-title { font-size: 0.8rem; color: var(--cyan); margin: 20px 0 10px 0; border-bottom: 1px solid rgba(97, 218, 251, 0.2); padding-bottom: 5px; }
         .admin-tools { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #333; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .admin-tools span { font-size: 0.75rem; color: #666; font-weight: bold; }
         .counter-wrapper { display: flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -430,51 +471,6 @@
             border-radius: 10px;
             margin-left: 8px;
         }
-
-        /* --- NOVAS ABAS INTEGRADAS (SEGMENTED CONTROL) --- */
-        .tabs-nav {
-            display: flex;
-            background: #18181b; /* Fundo escuro para o container */
-            padding: 5px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            margin-bottom: 25px;
-            gap: 5px;
-        }
-        .tab-btn {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 10px 15px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-align: center;
-        }
-        .tab-btn:hover {
-            color: var(--text-main);
-            background: rgba(255,255,255,0.03);
-        }
-        .tab-btn.active {
-            color: var(--text-main);
-            background: var(--bg-card); /* Fundo de cartão para a aba ativa */
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            border: 1px solid var(--border);
-        }
-        .tab-content {
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
     </style>
 </head>
 <body>
@@ -485,6 +481,23 @@
     </div>
 
     <div id="feedback-area"></div>
+
+    <!-- Sidebar Overlay & Menu -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <span class="sidebar-title"><i class="fas fa-bars"></i> Menu</span>
+            <i class="fas fa-times" onclick="toggleSidebar()" style="cursor:pointer; padding:5px;"></i>
+        </div>
+        <div class="sidebar-content">
+            <button class="sidebar-btn active" id="btn-nav-dashboard" onclick="navToDashboard()">
+                <i class="fas fa-home"></i> Início
+            </button>
+            <button class="sidebar-btn" id="btn-nav-admin" onclick="navToAdminSettings()">
+                <i class="fas fa-cog"></i> Administração
+            </button>
+        </div>
+    </div>
 
     <div id="auth-section" class="auth-wrapper">
         <div class="auth-card">
@@ -501,7 +514,7 @@
                 </form>
                 <div class="auth-divider"><span>ou continue com</span></div>
                 <a href="/auth/google" class="btn-google"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg> Google</a>
-                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">Não tem conta? <a href="#" style="color: var(--text-main); text-decoration: none;" onclick="toggleAuthForms()">Crie aqui</a></p>
+                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">Não tem conta? <a href="#" style="color: var(--blue); text-decoration: none;" onclick="toggleAuthForms()">Crie aqui</a></p>
             </div>
             <div id="register-form-container" class="hidden">
                 <form id="register-form">
@@ -519,8 +532,12 @@
     <div id="dashboard-container" class="hidden">
         <header>
             <div class="nav-bar">
-                <button id="nav-back-btn" class="nav-btn hidden" onclick="goBackToAdminHome()"><i class="fas fa-chevron-left"></i></button>
-                <div id="nav-placeholder" class="nav-btn" style="visibility: hidden; width: 40px;"></div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button id="nav-back-btn" class="nav-btn hidden" onclick="goBackToAdminHome()"><i class="fas fa-chevron-left"></i></button>
+                    <!-- Hamburger Menu for Admin -->
+                    <button id="admin-menu-btn" class="nav-btn hidden" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                </div>
+                
                 <div class="brand-center"><i class="fas fa-robot"></i> ZappBot</div>
                 <a href="#" class="nav-btn logout" title="Sair" onclick="confirmLogout()"><i class="fas fa-sign-out-alt"></i></a>
             </div>
@@ -530,20 +547,53 @@
             </div>
         </header>
         <div class="container">
-            <div id="admin-panel" class="hidden">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                    <h3 style="margin:0;">Painel de Controle (Admin)</h3>
+            
+            <!-- MAIN DASHBOARD VIEW (BOTS & GROUPS) -->
+            <div id="user-view">
+                <div id="view-header" style="margin: 15px 0;">
+                    <h2 id="main-title-text" style="font-size: 1.2rem; margin: 0;">Meus Robôs</h2>
+                    <p id="sub-title-text" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Aqui você cria e controla seus atendentes virtuais.</p>
                 </div>
-                
-                <div class="form-section" style="border-color: var(--primary); background: rgba(128, 128, 133, 0.1); margin-top: 20px;">
-                     <button onclick="goToMyBotsAdmin()" class="btn-primary" style="background: var(--primary); color: white;">
-                        <i class="fas fa-robot"></i> 🤖 Gerenciar Meus Bots (Admin)
-                    </button>
-                    <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 10px;">Acesse sua área pessoal de criação de robôs ilimitados.</p>
+                <div class="form-section">
+                    <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> <span id="add-bot-label">Criar Novo Robô</span></h4>
+                    <form id="add-bot-form">
+                        <div class="input-group"><label for="sessionName" class="input-label">1. Nome de Identificação</label><span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span><input type="text" id="sessionName" required placeholder="Ex: Bot_Vendas_01"></div>
+                        <div class="input-group"><label for="prompt" class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt()">Ver Exemplo</span></label><span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span><textarea id="prompt" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea></div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="botTypeGroup">
+                            <div>
+                                <label for="botTypeGroup">Ativar Modo Grupo</label>
+                                <div class="help-text">Este bot atuará em múltiplos grupos (cobrança por grupo).</div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" id="create-bot-btn" style="margin-top: 20px;">Salvar e Criar Robô</button>
+                    </form>
+                </div>
+                <div id="bots-grid"></div>
+
+                <div id="groups-section" style="margin-top: 40px;">
+                    <div id="view-header-groups" style="margin: 15px 0;">
+                        <h2 style="font-size: 1.2rem; margin: 0;">Gerenciamento de Grupos</h2>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Ative e gerencie as assinaturas dos seus grupos do WhatsApp.</p>
+                    </div>
+                    <div id="groups-grid"></div>
                 </div>
 
-                <div class="form-section" style="border-color: var(--border);">
-                    <h4 style="color: var(--text-main); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
+                <div id="user-logs-area" class="hidden" style="margin-top: 30px;">
+                    <h4>Histórico de Atividades</h4>
+                    <div id="user-log-content" class="logs-container" style="height: 150px; color: #ccc;"></div>
+                </div>
+            </div>
+
+            <!-- ADMIN SETTINGS VIEW (HIDDEN BY DEFAULT) -->
+            <div id="admin-settings-view" class="hidden">
+                <div id="view-header-admin" style="margin: 15px 0;">
+                    <h2 style="font-size: 1.2rem; margin: 0;">Administração</h2>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Configurações globais e gerenciamento de usuários.</p>
+                </div>
+
+                <div class="form-section" style="border-color: var(--cyan);">
+                    <h4 style="color: var(--cyan); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
                     <form id="admin-settings-form">
                         <div class="input-group"><label class="input-label">Token MercadoPago (Produção)</label><input type="text" id="mp-access-token" placeholder="APP_USR-xxxxxxxx..." required></div>
                         <div class="section-divider-title">Preços Renovação (Individual & Grupos)</div>
@@ -560,74 +610,18 @@
                             <div><label style="font-size:0.75rem; color:#888;">Lote 20 Bots</label><input type="number" id="price-resell-20" step="0.01"></div>
                             <div><label style="font-size:0.75rem; color:#888;">Lote 30 Bots</label><input type="number" id="price-resell-30" step="0.01"></div>
                         </div>
-                        <button type="submit" class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 10px;">Salvar Alterações</button>
+                        <button type="submit" class="btn-primary" style="background: var(--cyan); color: #000; margin-top: 10px;">Salvar Alterações</button>
                     </form>
                 </div>
+
                 <div class="form-section">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">Usuários Cadastrados</h4>
+                        <h4 style="margin: 0;">Gerenciar Usuários</h4>
                     </div>
                     <ul id="users-list" style="list-style: none; padding: 0;"></ul>
                 </div>
             </div>
 
-            <div id="user-view">
-                <div id="view-header" style="margin: 15px 0;">
-                    <h2 id="main-title-text" style="font-size: 1.2rem; margin: 0;">Painel de Controle</h2>
-                    <p id="sub-title-text" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Gerencie seus robôs e grupos.</p>
-                </div>
-
-                <!-- TABS NAVIGATION -->
-                <div class="tabs-nav">
-                    <button class="tab-btn active" onclick="openTab('individual')" id="tab-btn-individual">
-                        <i class="fas fa-robot"></i> Atendimento (Individual)
-                    </button>
-                    <button class="tab-btn" onclick="openTab('groups')" id="tab-btn-groups">
-                        <i class="fas fa-users"></i> Gestão de Grupos
-                    </button>
-                </div>
-
-                <!-- TAB CONTENT: INDIVIDUAL BOTS -->
-                <div id="tab-content-individual" class="tab-content">
-                    <div class="form-section">
-                        <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> <span id="add-bot-label-ind">Criar Robô de Atendimento</span></h4>
-                        <form id="add-bot-form-individual">
-                            <div class="input-group"><label class="input-label">1. Nome de Identificação</label><span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span><input type="text" id="sessionName-ind" required placeholder="Ex: Bot_Vendas_01"></div>
-                            <div class="input-group"><label class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt('ind')">Ver Exemplo</span></label><span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span><textarea id="prompt-ind" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea></div>
-                            <button type="submit" class="btn-primary" id="create-bot-btn-ind" style="margin-top: 20px;">Salvar e Criar Robô</button>
-                        </form>
-                    </div>
-                    <div id="individual-bots-grid"></div>
-                </div>
-
-                <!-- TAB CONTENT: GROUP BOTS -->
-                <div id="tab-content-groups" class="tab-content hidden">
-                    <div class="form-section" style="border-color: var(--blue);">
-                        <h4 style="margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; color: var(--text-main);"><i class="fas fa-plus-circle"></i> <span id="add-bot-label-grp">Criar Robô para Grupos</span></h4>
-                        <form id="add-bot-form-group">
-                            <div class="input-group"><label class="input-label">1. Nome de Identificação</label><span class="help-text">Nome para identificar o bot gerenciador de grupos.</span><input type="text" id="sessionName-grp" required placeholder="Ex: Bot_Grupos_01"></div>
-                            <div class="input-group"><label class="input-label">2. Instruções do Grupo <span class="example-link" onclick="fillExamplePrompt('grp')">Ver Exemplo</span></label><span class="help-text">Como o bot deve se comportar nos grupos?</span><textarea id="prompt-grp" rows="6" required placeholder="Ex: Você é um moderador de grupo..."></textarea></div>
-                            <button type="submit" class="btn-primary" id="create-bot-btn-grp" style="margin-top: 20px; background: var(--blue);">Salvar e Criar Robô de Grupo</button>
-                        </form>
-                    </div>
-
-                    <div class="section-divider-title">Robôs Gerenciadores de Grupos</div>
-                    <div id="group-bots-grid"></div>
-
-                    <div id="groups-section" style="margin-top: 40px;">
-                        <div id="view-header-groups" style="margin-bottom: 15px;">
-                            <h3 style="font-size: 1.1rem; margin: 0;">Grupos Conectados (WhatsApp)</h3>
-                            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Lista de grupos onde seus bots estão ativos.</p>
-                        </div>
-                        <div id="groups-grid"></div>
-                    </div>
-                </div>
-
-                <div id="user-logs-area" class="hidden" style="margin-top: 30px;">
-                    <h4>Histórico de Atividades</h4>
-                    <div id="user-log-content" class="logs-container" style="height: 150px; color: #ccc;"></div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -640,6 +634,13 @@
                 <input type="text" id="edit-sessionName-display" disabled style="opacity: 0.5; margin-bottom:15px; width:100%; padding:10px; border:1px solid #333; background:#111; color:#777; border-radius:6px;">
                 <label class="input-label">Personalidade</label>
                 <textarea id="edit-prompt" rows="8" required style="font-family: sans-serif;"></textarea>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="edit-botTypeGroup">
+                    <div>
+                        <label for="edit-botTypeGroup">Ativar Modo Grupo</label>
+                        <div class="help-text">Este bot atuará em múltiplos grupos.</div>
+                    </div>
+                </div>
                 <button type="submit" class="btn-primary" style="margin-top:10px;">Salvar Alterações</button>
             </form>
         </div>
@@ -690,7 +691,7 @@
     <div id="payment-modal" class="modal-overlay">
         <div class="modal-content text-center">
             <i class="fas fa-times" onclick="closePaymentModal()" style="position:absolute; right:20px; top:20px; padding:10px; cursor:pointer;"></i>
-            <h3 style="color: var(--text-main);">Renovar Acesso</h3>
+            <h3 style="color: var(--cyan);">Renovar Acesso</h3>
             <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 20px;">
                 <span id="payment-target-label">Robô</span>: <strong id="pay-session-name" style="color: white;"></strong>
             </p>
@@ -701,7 +702,7 @@
             </div>
 
             <div id="pix-loading" class="hidden payment-success-container" style="padding: 40px 0;">
-                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--text-main);"></i>
+                <i class="fas fa-circle-notch fa-spin fa-2x" style="color: var(--cyan);"></i>
                 <p style="margin-top: 15px;">Gerando código Pix...</p>
             </div>
 
@@ -714,7 +715,7 @@
 
                 <div class="copy-row">
                     <input type="text" id="pix-copy-paste" readonly class="input-copy">
-                    <button onclick="copyPixCode('pix-copy-paste')" class="btn-copy" style="background: var(--text-main); color: #000;">Copiar</button>
+                    <button onclick="copyPixCode('pix-copy-paste')" class="btn-copy" style="background: var(--cyan);">Copiar</button>
                 </div>
 
                 <button onclick="sharePixPayment('individual')" class="btn-share-pix">
@@ -766,7 +767,7 @@
     <div id="activation-link-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0; color: var(--text-main);">Link de Ativação de Grupo</h3>
+                <h3 style="margin:0; color: var(--blue);">Link de Ativação de Grupo</h3>
                 <i class="fas fa-times" onclick="document.getElementById('activation-link-modal').style.display='none'" style="padding:10px; cursor:pointer;"></i>
             </div>
             <p class="help-text" style="margin-bottom: 20px;">Siga os passos abaixo para ativar seu grupo:</p>
@@ -849,7 +850,47 @@
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('dashboard-container').classList.remove('hidden');
             document.getElementById('user-display-name').textContent = user.username;
+            
+            // Show hamburger menu only for admin
+            if (user.isAdmin) {
+                document.getElementById('admin-menu-btn').classList.remove('hidden');
+            } else {
+                document.getElementById('admin-menu-btn').classList.add('hidden');
+            }
+
             initializeSocket();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                overlay.style.display = 'none';
+            } else {
+                sidebar.classList.add('open');
+                overlay.style.display = 'block';
+            }
+        }
+
+        function navToDashboard() {
+            document.getElementById('user-view').classList.remove('hidden');
+            document.getElementById('admin-settings-view').classList.add('hidden');
+            
+            document.getElementById('btn-nav-dashboard').classList.add('active');
+            document.getElementById('btn-nav-admin').classList.remove('active');
+            
+            toggleSidebar();
+        }
+
+        function navToAdminSettings() {
+            document.getElementById('user-view').classList.add('hidden');
+            document.getElementById('admin-settings-view').classList.remove('hidden');
+            
+            document.getElementById('btn-nav-dashboard').classList.remove('active');
+            document.getElementById('btn-nav-admin').classList.add('active');
+            
+            toggleSidebar();
         }
 
         function toggleAuthForms() {
@@ -915,15 +956,9 @@
             setTimeout(() => feedbackArea.style.display = 'none', 4000);
         }
 
-        function fillExamplePrompt(type) {
-            let example = "";
-            if(type === 'ind') {
-                example = "Você é o assistente virtual da Pizzaria. \n1. Seja educado.\n2. Cardápio: Pizza Queijo (R$30), Pizza Frango (R$35).";
-                document.getElementById('prompt-ind').value = example;
-            } else {
-                example = "Você é um moderador de grupo. \n1. Dê boas vindas aos novos membros.\n2. Avise sobre as regras: Sem spam.";
-                document.getElementById('prompt-grp').value = example;
-            }
+        function fillExamplePrompt() {
+            const example = "Você é o assistente virtual da Pizzaria. \n1. Seja educado.\n2. Cardápio: Pizza Queijo (R$30), Pizza Frango (R$35).";
+            document.getElementById('prompt').value = example;
         }
 
         function confirmLogout() {
@@ -940,16 +975,14 @@
                 currentUser = data;
                 updateUserLimitUI(data.botLimit || 1);
 
+                // Always get bots for the current user (admin or not)
+                socket.emit('get-my-bots');
+                socket.emit('get-my-groups');
+
                 if (currentUser.isAdmin) {
-                    document.getElementById('admin-panel').classList.remove('hidden');
-                    document.getElementById('user-view').classList.add('hidden');
+                    // Load admin data but keep view hidden until navigated
                     socket.emit('admin-get-users');
                     socket.emit('admin-settings');
-                } else {
-                    document.getElementById('admin-panel').classList.add('hidden');
-                    document.getElementById('user-view').classList.remove('hidden');
-                    socket.emit('get-my-bots');
-                    socket.emit('get-my-groups');
                 }
                 socket.emit('get-public-prices');
             });
@@ -961,13 +994,7 @@
                 showFeedback(true, `Parabéns! Seu limite agora é de ${newLimit} robôs!`);
             });
 
-            socket.on('initial-bots-list', (bots) => { 
-                console.log('Bots recebidos:', bots);
-                document.getElementById('individual-bots-grid').innerHTML = ''; 
-                document.getElementById('group-bots-grid').innerHTML = ''; 
-                botsData = {}; 
-                bots.forEach(renderBotCard); 
-            });
+            socket.on('initial-bots-list', (bots) => { document.getElementById('bots-grid').innerHTML = ''; botsData = {}; bots.forEach(renderBotCard); });
             socket.on('initial-groups-list', (groups) => { document.getElementById('groups-grid').innerHTML = ''; groups.forEach(renderGroupCard); });
             socket.on('group-list-updated', (groups) => { document.getElementById('groups-grid').innerHTML = ''; groups.forEach(renderGroupCard); });
 
@@ -976,21 +1003,16 @@
                 if (currentUser.isAdmin && viewedUser && bot.owner !== viewedUser) return;
                 
                 if (currentUser.isAdmin && !viewedUser && bot.owner === currentUser.username) {
+                    // Admin viewing their own bots
                 } else if (currentUser.isAdmin && !viewedUser && bot.owner !== currentUser.username) {
                     return; 
                 }
 
-                // Reset buttons
-                const btnInd = document.getElementById('create-bot-btn-ind');
-                const btnGrp = document.getElementById('create-bot-btn-grp');
-                
-                if(btnInd.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
-                    btnInd.disabled = false; btnInd.innerHTML = 'Salvar e Criar Robô';
+                const btn = document.getElementById('create-bot-btn');
+                if(btn.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Salvar e Criar Robô';
                 }
-                if(btnGrp.disabled && document.getElementById(`bot-${bot.sessionName}`)) {
-                    btnGrp.disabled = false; btnGrp.innerHTML = 'Salvar e Criar Robô de Grupo';
-                }
-
                 renderBotCard(bot); 
             });
             socket.on('bot-deleted', (d) => { const el = document.getElementById(`bot-${d.sessionName}`); if(el) el.remove(); });
@@ -1051,12 +1073,14 @@
             socket.on('feedback', (d) => {
                 if(!d.success && d.error === 'limit_reached') {
                     openResellModal();
-                    const btnInd = document.getElementById('create-bot-btn-ind');
-                    const btnGrp = document.getElementById('create-bot-btn-grp');
-                    btnInd.disabled = false; btnInd.innerHTML = 'Salvar e Criar Robô';
-                    btnGrp.disabled = false; btnGrp.innerHTML = 'Salvar e Criar Robô de Grupo';
+                    const btn = document.getElementById('create-bot-btn');
+                    btn.disabled = false; btn.innerHTML = 'Salvar e Criar Robô';
                 } else {
                     showFeedback(d.success, d.message);
+                    // --- CORREÇÃO: Força atualização se o feedback for de sucesso de grupo ---
+                    if (d.success && d.message.includes('ativado') || d.message.includes('pronto')) {
+                        socket.emit('get-my-groups');
+                    }
                 }
             });
         }
@@ -1071,67 +1095,34 @@
 
         function openAdminUserView(user) {
             viewedUser = user.username;
-            document.getElementById('admin-panel').classList.add('hidden');
+            // Hide admin specific sections when viewing a user
+            document.getElementById('admin-settings-view').classList.add('hidden');
             document.getElementById('user-view').classList.remove('hidden');
+            document.getElementById('groups-section').classList.add('hidden');
+            
             const backBtn = document.getElementById('nav-back-btn');
             backBtn.classList.remove('hidden');
-            document.getElementById('nav-placeholder').classList.add('hidden');
+            
             document.getElementById('main-title-text').textContent = user.username;
             document.getElementById('sub-title-text').textContent = `Gerenciando bots deste usuário`;
-            document.getElementById('add-bot-label-ind').textContent = 'Criar Bot para este usuário';
+            document.getElementById('add-bot-label').textContent = 'Criar Bot para este usuário';
             document.getElementById('user-logs-area').classList.remove('hidden');
             const logC = document.getElementById('user-log-content'); logC.innerHTML = '';
             if(user.log) user.log.slice().reverse().forEach(l => logC.innerHTML += `<div class="log-line">${l}</div>`);
-            document.getElementById('individual-bots-grid').innerHTML = '';
-            document.getElementById('group-bots-grid').innerHTML = '';
-            
-            // Solicita bots E grupos do usuário
+            document.getElementById('bots-grid').innerHTML = '';
             socket.emit('admin-get-bots-for-user', { username: user.username });
-            socket.emit('admin-get-groups-for-user', { username: user.username });
-            
-            // Reset tabs to default for admin view
-            openTab('individual');
-        }
-
-        function goToMyBotsAdmin() {
-            viewedUser = null; 
-            document.getElementById('admin-panel').classList.add('hidden');
-            document.getElementById('user-view').classList.remove('hidden');
-            document.getElementById('nav-back-btn').classList.remove('hidden');
-            document.getElementById('nav-placeholder').classList.add('hidden');
-            document.getElementById('main-title-text').textContent = "Meus Robôs (Admin)";
-            document.getElementById('sub-title-text').textContent = "Criação de bots ilimitada para administração.";
-            document.getElementById('add-bot-label-ind').textContent = 'Criar Novo Robô';
-            document.getElementById('user-logs-area').classList.remove('hidden');
-            document.getElementById('individual-bots-grid').innerHTML = '';
-            document.getElementById('group-bots-grid').innerHTML = '';
-            socket.emit('get-my-bots');
-            openTab('individual');
         }
 
         function goBackToAdminHome() {
             viewedUser = null;
+            // Return to Admin Settings view if that's where we came from, or Dashboard?
+            // Usually "Back" implies going back to the list of users.
             document.getElementById('user-view').classList.add('hidden');
-            document.getElementById('admin-panel').classList.remove('hidden');
+            document.getElementById('admin-settings-view').classList.remove('hidden');
             document.getElementById('nav-back-btn').classList.add('hidden');
-            document.getElementById('nav-placeholder').classList.remove('hidden');
-            document.getElementById('individual-bots-grid').innerHTML = '';
-            document.getElementById('group-bots-grid').innerHTML = '';
-            document.getElementById('groups-grid').innerHTML = '';
-        }
-
-        function openTab(tabName) {
-            // Hide all content
-            document.getElementById('tab-content-individual').classList.add('hidden');
-            document.getElementById('tab-content-groups').classList.add('hidden');
             
-            // Remove active class from buttons
-            document.getElementById('tab-btn-individual').classList.remove('active');
-            document.getElementById('tab-btn-groups').classList.remove('active');
-            
-            // Show selected content and activate button
-            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
-            document.getElementById(`tab-btn-${tabName}`).classList.add('active');
+            // Reset titles if needed, though they are static in the views
+            document.getElementById('bots-grid').innerHTML = '';
         }
 
         function formatDate(isoString) {
@@ -1284,18 +1275,10 @@
 
             if(!card) {
                 card = document.createElement('div'); card.className = 'bot-card'; card.id = `bot-${bot.sessionName}`;
-                
-                // DECIDE ONDE INSERIR O CARD BASEADO NO TIPO
-                if(isGroupBot) {
-                    document.getElementById('group-bots-grid').prepend(card);
-                } else {
-                    document.getElementById('individual-bots-grid').prepend(card);
-                }
-            } else {
-                // Se o card já existe, apenas atualiza o HTML
-                card.innerHTML = html;
+                document.getElementById('bots-grid').prepend(card);
             }
-            
+            card.innerHTML = html;
+
             const svLogs = sessionStorage.getItem(`log-${bot.sessionName}`);
             const logC = card.querySelector('.logs-container');
             if(svLogs) { 
@@ -1330,13 +1313,13 @@
                     if (isExpired) {
                         statusClass = 'st-expired'; statusIcon = 'fa-times-circle'; statusText = 'Expirado';
                         actionButton = `
-                        <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                        <button class="btn-primary" style="background: var(--cyan); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
                             <i class="fas fa-bolt"></i> Renovar Assinatura
                         </button>`;
                     } else {
                         statusClass = 'st-active'; statusIcon = 'fa-check-circle'; statusText = 'Ativo';
                         actionButton = `
-                        <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                        <button class="btn-primary" style="background: var(--cyan); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
                             <i class="fas fa-bolt"></i> Estender Assinatura
                         </button>`;
                     }
@@ -1351,7 +1334,7 @@
                 default:
                     statusClass = 'st-offline'; statusIcon = 'fa-question-circle'; statusText = 'Desconhecido';
                     actionButton = `
-                    <button class="btn-primary" style="background: var(--text-main); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
+                    <button class="btn-primary" style="background: var(--cyan); color: #000; margin-top: 20px;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')">
                         <i class="fas fa-bolt"></i> Pagar / Renovar
                     </button>`;
             }
@@ -1362,6 +1345,28 @@
                     <i class="fas fa-trash"></i> Remover Grupo
                 </button>
             `;
+
+            // --- ADMIN TOOLS FOR GROUPS ---
+            let daysForInput = 0;
+            if (expiresAt) {
+                const timeLeft = expiresAt - now;
+                daysForInput = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+                if (daysForInput < 0) daysForInput = 0;
+            }
+
+            const adminTools = currentUser.isAdmin ? `
+                <div class="admin-tools">
+                    <span>ADMIN DIAS:</span>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <div class="counter-wrapper">
+                            <button class="counter-btn" onclick="modGroupDays('${group.groupId}', -1)"><i class="fas fa-minus"></i></button>
+                            <input type="number" id="gd-${group.groupId}" class="days-input" value="${daysForInput}">
+                            <button class="counter-btn" onclick="modGroupDays('${group.groupId}', 1)"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <button class="btn-save-days" onclick="admSaveGroupDays('${group.groupId}')" title="Salvar"><i class="fas fa-save"></i></button>
+                    </div>
+                </div>
+            ` : '';
 
             const html = `
                 <div class="card-header">
@@ -1386,6 +1391,7 @@
                     </div>
                     ${actionButton}
                     ${deleteBtn}
+                    ${adminTools}
                 </div>
             `;
 
@@ -1520,7 +1526,15 @@
         document.getElementById('pairing-form').onsubmit = (e) => {
             e.preventDefault();
             const sessionName = document.getElementById('pairing-sessionName-hidden').value;
-            const phoneNumber = document.getElementById('pairing-phone-number').value;
+            let phoneNumber = document.getElementById('pairing-phone-number').value;
+            
+            // Limpeza do número para garantir apenas dígitos
+            phoneNumber = phoneNumber.replace(/\D/g, '');
+
+            if (phoneNumber.length < 10) {
+                showFeedback(false, 'Número inválido. Digite com DDD.');
+                return;
+            }
             
             socket.emit('stop-bot', { sessionName });
             
@@ -1535,6 +1549,19 @@
         function delBot(n) { if(confirm('Apagar "'+n+'"?')) sock('delete-bot', n); }
         function modDays(sessionName, delta) { const input = document.getElementById(`d-${sessionName}`); let val = parseInt(input.value)||0; val+=delta; input.value=val; }
         function admSaveDays(sessionName) { socket.emit('admin-set-days', { sessionName: sessionName, days: document.getElementById(`d-${sessionName}`).value }); }
+        
+        // --- FUNÇÕES PARA ADMINISTRAÇÃO DE DIAS DE GRUPO ---
+        function modGroupDays(groupId, delta) { 
+            const input = document.getElementById(`gd-${groupId}`); 
+            let val = parseInt(input.value)||0; 
+            val+=delta; 
+            input.value=val; 
+        }
+        function admSaveGroupDays(groupId) { 
+            socket.emit('admin-set-group-days', { groupId: groupId, days: document.getElementById(`gd-${groupId}`).value }); 
+        }
+        // ---------------------------------------------------
+
         function delUser(e, u) { e.stopPropagation(); if(confirm('Apagar usuário '+u+'?')) socket.emit('admin-delete-user', {username:u}); }
         function clearLogs(n) { sessionStorage.removeItem(`log-${n}`); document.querySelector(`#bot-${n} .logs-container`).innerHTML='<div style="display:flex; justify-content:space-between; margin-bottom:5px; color:#666;"><span>TERMINAL</span><span onclick="clearLogs(\''+n+'\')" style="cursor:pointer; font-size:0.65rem; text-decoration:underline;">Limpar</span></div>'; }
         
@@ -1544,17 +1571,16 @@
             document.getElementById('edit-sessionName-hidden').value=n;
             document.getElementById('edit-sessionName-display').value=n;
             document.getElementById('edit-prompt').value=bot.prompt;
+            document.getElementById('edit-botTypeGroup').checked = bot.botType === 'group';
         }
         function closeEditModal() { document.getElementById('edit-modal').style.display='none'; }
         
         document.getElementById('edit-bot-form').onsubmit = (e) => { 
             e.preventDefault(); 
-            // Mantém o tipo original do bot
-            const originalBot = botsData[document.getElementById('edit-sessionName-hidden').value];
             socket.emit('update-bot', { 
                 sessionName: document.getElementById('edit-sessionName-hidden').value, 
                 newPrompt: document.getElementById('edit-prompt').value,
-                botType: originalBot.botType
+                botType: document.getElementById('edit-botTypeGroup').checked ? 'group' : 'individual'
             }); 
             closeEditModal(); 
         };
@@ -1611,42 +1637,23 @@
             socket.emit('update-ignored-identifiers', { sessionName, ignoredIdentifiers: newList });
         }
 
-        // HANDLER PARA CRIAR BOT INDIVIDUAL
-        document.getElementById('add-bot-form-individual').onsubmit=(e)=>{
+        document.getElementById('add-bot-form').onsubmit=(e)=>{
             e.preventDefault(); 
-            const nInput = document.getElementById('sessionName-ind');
-            const pInput = document.getElementById('prompt-ind');
+            const nInput = document.getElementById('sessionName');
+            const pInput = document.getElementById('prompt');
+            const isGroupBot = document.getElementById('botTypeGroup').checked;
             let n = nInput.value.trim().replace(/\s+/g,'_');
             if(n.length < 3) { alert('O nome deve ter 3 letras.'); return; }
             const o = (currentUser.isAdmin && viewedUser) ? viewedUser : currentUser.username;
-            const btn = document.getElementById('create-bot-btn-ind');
+            const btn = document.getElementById('create-bot-btn');
             btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
             socket.emit('create-bot', { 
                 sessionName:n, 
                 prompt:pInput.value.trim(), 
                 owner:o,
-                botType: 'individual'
+                botType: isGroupBot ? 'group' : 'individual'
             });
-            nInput.value=''; pInput.value='';
-        };
-
-        // HANDLER PARA CRIAR BOT DE GRUPO
-        document.getElementById('add-bot-form-group').onsubmit=(e)=>{
-            e.preventDefault(); 
-            const nInput = document.getElementById('sessionName-grp');
-            const pInput = document.getElementById('prompt-grp');
-            let n = nInput.value.trim().replace(/\s+/g,'_');
-            if(n.length < 3) { alert('O nome deve ter 3 letras.'); return; }
-            const o = (currentUser.isAdmin && viewedUser) ? viewedUser : currentUser.username;
-            const btn = document.getElementById('create-bot-btn-grp');
-            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
-            socket.emit('create-bot', { 
-                sessionName:n, 
-                prompt:pInput.value.trim(), 
-                owner:o,
-                botType: 'group'
-            });
-            nInput.value=''; pInput.value='';
+            nInput.value=''; pInput.value=''; document.getElementById('botTypeGroup').checked = false;
         };
         
         document.getElementById('admin-settings-form').onsubmit=(e)=>{ 
@@ -1662,6 +1669,7 @@
                 priceResell20: document.getElementById('price-resell-20').value,
                 priceResell30: document.getElementById('price-resell-30').value,
             }); 
+            showFeedback(true, 'Configurações salvas!');
         };
 
         let currentPaySession = '';
