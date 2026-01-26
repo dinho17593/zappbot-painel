@@ -26,9 +26,9 @@ echo "Instalando bibliotecas (npm install)..."
 rm -rf node_modules
 npm install
 
-# --- CORREÇÃO IMPORTANTE: Instala explicitamente o cookie-parser ---
-echo "Instalando dependência de segurança (cookie-parser)..."
-npm install cookie-parser
+# --- CORREÇÃO IMPORTANTE: Instala explicitamente pacotes adicionais ---
+echo "Instalando dependências extras (cookie-parser, socket.io-client)..."
+npm install cookie-parser socket.io-client
 # ------------------------------------------------------------------
 
 # 3. GARANTIR O NOME SERVER.JS
