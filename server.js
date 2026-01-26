@@ -432,6 +432,7 @@ io.on('connection', (socket) => {
             socket.on('admin-settings', (s) => socket.emit('admin-settings', readDB(SETTINGS_DB_PATH)));
             socket.on('save-settings', (ns) => { writeDB(SETTINGS_DB_PATH, ns); socket.emit('feedback', { success: true, message: 'Salvo' }); io.emit('public-prices', ns); });
 
+            // --- LÓGICA CORRIGIDA BOT (COM SUBTRAÇÃO DE MINUTOS) ---
             socket.on('admin-set-days', ({ sessionName, days }) => {
                 const bots = readDB(BOTS_DB_PATH);
                 const bot = bots[sessionName];
@@ -439,9 +440,11 @@ io.on('connection', (socket) => {
                 if (bot) {
                     const d = parseInt(days);
                     const now = new Date();
+                    
                     const newDate = new Date(now);
-
                     newDate.setDate(newDate.getDate() + d);
+                    
+                    // CORREÇÃO: Subtrai 10 minutos para evitar que "Math.ceil" do navegador arredonde para cima (Ex: 31 dias)
                     newDate.setMinutes(newDate.getMinutes() - 10);
 
                     bot.trialExpiresAt = newDate.toISOString();
@@ -453,6 +456,7 @@ io.on('connection', (socket) => {
                 }
             });
 
+            // --- LÓGICA CORRIGIDA GRUPO (COM SUBTRAÇÃO DE MINUTOS) ---
             socket.on('admin-set-group-days', ({ groupId, days }) => {
                 const groups = readDB(GROUPS_DB_PATH);
                 const group = groups[groupId];
@@ -460,18 +464,20 @@ io.on('connection', (socket) => {
                 if (group) {
                     const d = parseInt(days);
                     const now = new Date();
-                    let baseDate = (group.expiresAt && new Date(group.expiresAt) > now) ? new Date(group.expiresAt) : new Date(now);
-                    if (d > 0 && (!group.expiresAt || new Date(group.expiresAt) < now)) {
-                        baseDate = new Date(now);
-                    }
+                    
+                    const baseDate = new Date(now);
                     baseDate.setDate(baseDate.getDate() + d);
+
+                    // CORREÇÃO: Subtrai 10 minutos
+                    baseDate.setMinutes(baseDate.getMinutes() - 10);
+
                     group.expiresAt = baseDate.toISOString();
                     group.status = 'active'; 
 
                     writeDB(GROUPS_DB_PATH, groups);
                     io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
                     socket.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
-                    socket.emit('feedback', { success: true, message: 'Dias do grupo atualizados.' });
+                    socket.emit('feedback', { success: true, message: 'Dias do grupo definidos com sucesso.' });
 
                     const botSessionName = group.managedByBot;
                     if (activeBots[botSessionName]) {
