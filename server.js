@@ -169,13 +169,11 @@ app.post('/api/generate-activation-link', (req, res) => {
     }
 
     const token = crypto.randomUUID();
-    // GARANTE QUE O EMAIL SEJA MINÚSCULO PARA EVITAR ERROS DE COMPARAÇÃO
     const ownerEmail = req.session.user.username.toLowerCase();
     const expiresAt = Date.now() + 15 * 60 * 1000; 
 
     activationTokens[token] = { ownerEmail, expiresAt };
 
-    // Limpeza de tokens antigos
     Object.keys(activationTokens).forEach(t => {
         if (activationTokens[t].expiresAt < Date.now()) {
             delete activationTokens[t];
@@ -242,7 +240,6 @@ app.post('/webhook/mercadopago', async (req, res) => {
                         users[referenceId].trialUsed = true;
                         users[referenceId].trialExpiresAt = "PAID_USER";
                         writeDB(USERS_DB_PATH, users);
-                        // Notifica via Sala (minúsculo)
                         io.to(referenceId.toLowerCase()).emit('update-limit', users[referenceId].botLimit);
                     }
                 } else if (paymentType === 'bot') {
@@ -281,7 +278,6 @@ app.post('/webhook/mercadopago', async (req, res) => {
                         group.expiresAt = baseDate.toISOString();
                         writeDB(GROUPS_DB_PATH, groups);
 
-                        // Notifica o dono via Sala (minúsculo)
                         io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
                         io.to(group.owner.toLowerCase()).emit('feedback', { success: true, message: `Grupo "${group.groupName}" ativado com sucesso!` });
 
@@ -415,375 +411,326 @@ io.use((socket, next) => {
             next(new Error('User not found in DB'));
         }
     } else {
-        next(new Error('Auth error'));
+        next();
     }
 });
 
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
-    if (!user) { socket.disconnect(); return; }
+    
+    if (user) {
+        socket.join(user.username.toLowerCase());
+        const uData = readDB(USERS_DB_PATH)[user.username];
+        socket.emit('session-info', { username: user.username, isAdmin: user.isAdmin, botLimit: uData?.botLimit || 1 });
 
-    // --- CORREÇÃO: Força minúsculo na sala ---
-    socket.join(user.username.toLowerCase());
-    // -----------------------------------------
-
-    const uData = readDB(USERS_DB_PATH)[user.username];
-    socket.emit('session-info', { username: user.username, isAdmin: user.isAdmin, botLimit: uData?.botLimit || 1 });
-
-    socket.on('get-public-prices', () => {
-        const s = readDB(SETTINGS_DB_PATH);
-        socket.emit('public-prices', { monthly: s.priceMonthly, quarterly: s.priceQuarterly, semiannual: s.priceSemiannual, yearly: s.priceYearly, resell5: s.priceResell5, resell10: s.priceResell10, resell20: s.priceResell20, resell30: s.priceResell30 });
-    });
-
-    if (user.isAdmin) {
-        socket.on('admin-settings', (s) => socket.emit('admin-settings', readDB(SETTINGS_DB_PATH)));
-        socket.on('save-settings', (ns) => { writeDB(SETTINGS_DB_PATH, ns); socket.emit('feedback', { success: true, message: 'Salvo' }); io.emit('public-prices', ns); });
-
-        socket.on('admin-set-days', ({ sessionName, days }) => {
-            const bots = readDB(BOTS_DB_PATH);
-            const bot = bots[sessionName];
-
-            if (bot) {
-                const d = parseInt(days);
-                const now = new Date();
-                const newDate = new Date(now);
-
-                newDate.setDate(newDate.getDate() + d);
-                newDate.setMinutes(newDate.getMinutes() - 10);
-
-                bot.trialExpiresAt = newDate.toISOString();
-                bot.activated = true;
-                bot.isTrial = false;
-
-                writeDB(BOTS_DB_PATH, bots);
-                io.emit('bot-updated', bot);
-            }
+        socket.on('get-public-prices', () => {
+            const s = readDB(SETTINGS_DB_PATH);
+            socket.emit('public-prices', { monthly: s.priceMonthly, quarterly: s.priceQuarterly, semiannual: s.priceSemiannual, yearly: s.priceYearly, resell5: s.priceResell5, resell10: s.priceResell10, resell20: s.priceResell20, resell30: s.priceResell30 });
         });
 
-        socket.on('admin-set-group-days', ({ groupId, days }) => {
+        if (user.isAdmin) {
+            socket.on('admin-settings', (s) => socket.emit('admin-settings', readDB(SETTINGS_DB_PATH)));
+            socket.on('save-settings', (ns) => { writeDB(SETTINGS_DB_PATH, ns); socket.emit('feedback', { success: true, message: 'Salvo' }); io.emit('public-prices', ns); });
+
+            socket.on('admin-set-days', ({ sessionName, days }) => {
+                const bots = readDB(BOTS_DB_PATH);
+                const bot = bots[sessionName];
+
+                if (bot) {
+                    const d = parseInt(days);
+                    const now = new Date();
+                    const newDate = new Date(now);
+
+                    newDate.setDate(newDate.getDate() + d);
+                    newDate.setMinutes(newDate.getMinutes() - 10);
+
+                    bot.trialExpiresAt = newDate.toISOString();
+                    bot.activated = true;
+                    bot.isTrial = false;
+
+                    writeDB(BOTS_DB_PATH, bots);
+                    io.emit('bot-updated', bot);
+                }
+            });
+
+            socket.on('admin-set-group-days', ({ groupId, days }) => {
+                const groups = readDB(GROUPS_DB_PATH);
+                const group = groups[groupId];
+
+                if (group) {
+                    const d = parseInt(days);
+                    const now = new Date();
+                    let baseDate = (group.expiresAt && new Date(group.expiresAt) > now) ? new Date(group.expiresAt) : new Date(now);
+                    if (d > 0 && (!group.expiresAt || new Date(group.expiresAt) < now)) {
+                        baseDate = new Date(now);
+                    }
+                    baseDate.setDate(baseDate.getDate() + d);
+                    group.expiresAt = baseDate.toISOString();
+                    group.status = 'active'; 
+
+                    writeDB(GROUPS_DB_PATH, groups);
+                    io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                    socket.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
+                    socket.emit('feedback', { success: true, message: 'Dias do grupo atualizados.' });
+
+                    const botSessionName = group.managedByBot;
+                    if (activeBots[botSessionName]) {
+                        console.log(`[ADMIN GROUP DAYS] Reiniciando bot ${botSessionName} para aplicar novos dias.`);
+                        activeBots[botSessionName].process.kill('SIGINT');
+                        delete activeBots[botSessionName];
+                        setTimeout(() => {
+                            const currentBots = readDB(BOTS_DB_PATH);
+                            if (currentBots[botSessionName]) {
+                                startBotProcess(currentBots[botSessionName]);
+                            }
+                        }, 1000);
+                    }
+                }
+            });
+
+            socket.on('admin-get-users', () => socket.emit('admin-users-list', Object.values(readDB(USERS_DB_PATH)).map(({ password, ...r }) => r)));
+            socket.on('admin-delete-user', ({ username }) => {
+                const users = readDB(USERS_DB_PATH);
+                delete users[username];
+                writeDB(USERS_DB_PATH, users);
+                socket.emit('admin-users-list', Object.values(users).map(({ password, ...r }) => r));
+            });
+            socket.on('admin-get-bots-for-user', ({ username }) => socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === username)));
+        }
+
+        socket.on('get-my-bots', () => {
+            socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username));
+        });
+
+        socket.on('get-my-groups', () => {
+            socket.emit('initial-groups-list', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === user.username));
+        });
+
+        socket.on('delete-group', ({ groupId }) => {
             const groups = readDB(GROUPS_DB_PATH);
             const group = groups[groupId];
+            if (!group) return socket.emit('feedback', { success: false, message: 'Grupo não encontrado.' });
+            const bots = readDB(BOTS_DB_PATH);
+            const bot = bots[group.managedByBot];
+            const isBotOwner = bot && bot.owner === user.username;
+            const isGroupOwner = group.owner === user.username;
+            if (!user.isAdmin && !isBotOwner && !isGroupOwner) {
+                return socket.emit('feedback', { success: false, message: 'Permissão negada.' });
+            }
+            const botSessionName = group.managedByBot;
+            delete groups[groupId];
+            writeDB(GROUPS_DB_PATH, groups);
+            socket.emit('group-list-updated', Object.values(groups).filter(g => g.owner === user.username));
+            socket.emit('feedback', { success: true, message: 'Grupo removido com sucesso.' });
+            if (activeBots[botSessionName]) {
+                console.log(`[DELETE GROUP] Reiniciando bot ${botSessionName} para aplicar remoção do grupo.`);
+                activeBots[botSessionName].process.kill('SIGINT');
+                delete activeBots[botSessionName];
+                setTimeout(() => {
+                    const currentBots = readDB(BOTS_DB_PATH);
+                    if (currentBots[botSessionName]) {
+                        startBotProcess(currentBots[botSessionName]);
+                    }
+                }, 1000);
+            }
+        });
 
-            if (group) {
-                const d = parseInt(days);
-                const now = new Date();
-                
-                let baseDate = (group.expiresAt && new Date(group.expiresAt) > now) ? new Date(group.expiresAt) : new Date(now);
-                
-                if (d > 0 && (!group.expiresAt || new Date(group.expiresAt) < now)) {
-                    baseDate = new Date(now);
+        socket.on('create-bot', (d) => {
+            const bots = readDB(BOTS_DB_PATH);
+            let users = readDB(USERS_DB_PATH);
+            const owner = (user.isAdmin && d.owner) ? d.owner : user.username;
+            const ownerData = users[owner];
+            if (bots[d.sessionName]) return socket.emit('feedback', { success: false, message: 'Nome de robô já em uso.' });
+            if (d.botType !== 'group' && Object.values(bots).filter(b => b.owner === owner && b.botType !== 'group').length >= (ownerData.botLimit || 1) && !ownerData.isAdmin) {
+                return socket.emit('feedback', { success: false, error: 'limit_reached' });
+            }
+            const now = new Date();
+            let trialEndDate = new Date(0);
+            let isTrial = false;
+            let feedbackMessage = 'Robô criado. Realize o pagamento para ativar.';
+            if (d.botType !== 'group') {
+                if (ownerData.salvagedTime && new Date(ownerData.salvagedTime.expiresAt) > now) {
+                    trialEndDate = new Date(ownerData.salvagedTime.expiresAt);
+                    isTrial = ownerData.salvagedTime.isTrial;
+                    ownerData.salvagedTime = null;
+                    users[owner] = ownerData;
+                    writeDB(USERS_DB_PATH, users);
+                    feedbackMessage = 'Bot criado utilizando o tempo restante do anterior.';
+                } else {
+                    if (ownerData.isAdmin || !ownerData.trialUsed) {
+                        trialEndDate = new Date(now);
+                        trialEndDate.setHours(trialEndDate.getHours() + 24);
+                        isTrial = true;
+                        feedbackMessage = 'Robô criado e iniciando (Teste Grátis)...';
+                    }
                 }
+            } else {
+                trialEndDate = new Date(now);
+                trialEndDate.setFullYear(trialEndDate.getFullYear() + 10);
+                isTrial = false;
+                feedbackMessage = 'Bot Agregador de Grupos criado com sucesso!';
+            }
+            const newBot = { sessionName: d.sessionName, prompt: d.prompt, status: 'Offline', owner, activated: false, isTrial: isTrial, createdAt: now.toISOString(), trialExpiresAt: trialEndDate.toISOString(), ignoredIdentifiers: [], botType: d.botType || 'individual' };
+            bots[d.sessionName] = newBot;
+            writeDB(BOTS_DB_PATH, bots);
+            io.emit('bot-updated', newBot);
+            const canStart = new Date(newBot.trialExpiresAt) > new Date();
+            if (canStart) {
+                startBotProcess(newBot);
+            }
+            socket.emit('feedback', { success: true, message: feedbackMessage });
+        });
 
-                baseDate.setDate(baseDate.getDate() + d);
-                
-                group.expiresAt = baseDate.toISOString();
-                group.status = 'active'; 
+        socket.on('start-bot', ({ sessionName, phoneNumber }) => {
+            const bots = readDB(BOTS_DB_PATH);
+            const bot = bots[sessionName];
+            if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
+            if (new Date(bot.trialExpiresAt) < new Date()) {
+                return socket.emit('feedback', { success: false, message: 'Robô expirado. Renove para ligar.' });
+            }
+            if (activeBots[sessionName]) return socket.emit('feedback', { success: false, message: 'O robô já está rodando.' });
+            startBotProcess(bot, phoneNumber);
+            socket.emit('feedback', { success: true, message: 'Iniciando o robô...' });
+        });
 
-                writeDB(GROUPS_DB_PATH, groups);
+        socket.on('stop-bot', ({ sessionName }) => {
+            if (activeBots[sessionName]) { activeBots[sessionName].process.kill('SIGINT'); delete activeBots[sessionName]; }
+            updateBotStatus(sessionName, 'Offline');
+            socket.emit('feedback', { success: true, message: 'Robô parado.' });
+        });
 
-                // Notifica o dono via Sala (minúsculo)
-                io.to(group.owner.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
-                
-                socket.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === group.owner));
-                socket.emit('feedback', { success: true, message: 'Dias do grupo atualizados.' });
+        socket.on('delete-bot', ({ sessionName }) => {
+            let bots = readDB(BOTS_DB_PATH);
+            let users = readDB(USERS_DB_PATH);
+            const botToDelete = bots[sessionName];
+            if (!botToDelete || (!user.isAdmin && botToDelete.owner !== user.username)) return;
+            if (botToDelete.botType !== 'group') {
+                const owner = users[botToDelete.owner];
+                const expirationDate = new Date(botToDelete.trialExpiresAt);
+                if (owner && expirationDate > new Date()) {
+                    owner.salvagedTime = { expiresAt: botToDelete.trialExpiresAt, isTrial: botToDelete.isTrial };
+                    users[botToDelete.owner] = owner;
+                    writeDB(USERS_DB_PATH, users);
+                    socket.emit('feedback', { success: true, message: 'Bot excluído. O tempo restante foi salvo para o próximo bot que você criar.' });
+                } else {
+                    socket.emit('feedback', { success: true, message: 'Bot excluído.' });
+                }
+            } else {
+                 socket.emit('feedback', { success: true, message: 'Bot Agregador excluído.' });
+            }
+            if (activeBots[sessionName]) {
+                activeBots[sessionName].process.kill('SIGINT');
+                delete activeBots[sessionName];
+            }
+            delete bots[sessionName];
+            writeDB(BOTS_DB_PATH, bots);
+            if (fs.existsSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`))) {
+                fs.rmSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`), { recursive: true, force: true });
+            }
+            io.emit('bot-deleted', { sessionName });
+        });
 
-                const botSessionName = group.managedByBot;
-                if (activeBots[botSessionName]) {
-                    console.log(`[ADMIN GROUP DAYS] Reiniciando bot ${botSessionName} para aplicar novos dias.`);
-                    activeBots[botSessionName].process.kill('SIGINT');
-                    delete activeBots[botSessionName];
-                    setTimeout(() => {
-                        const currentBots = readDB(BOTS_DB_PATH);
-                        if (currentBots[botSessionName]) {
-                            startBotProcess(currentBots[botSessionName]);
-                        }
-                    }, 1000);
+        socket.on('update-bot', (d) => {
+            const bots = readDB(BOTS_DB_PATH);
+            const bot = bots[d.sessionName];
+            if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
+            if (bot) {
+                bot.prompt = d.newPrompt;
+                if (d.botType !== undefined) bot.botType = d.botType;
+                writeDB(BOTS_DB_PATH, bots);
+                io.emit('bot-updated', bot);
+                if (activeBots[d.sessionName]) {
+                    try { activeBots[d.sessionName].process.kill('SIGINT'); } catch (e) { console.error(`Erro ao parar ${d.sessionName} para update:`, e); }
+                    delete activeBots[d.sessionName];
+                    socket.emit('feedback', { success: true, message: 'Configurações salvas. Reiniciando o robô...' });
+                    setTimeout(() => { startBotProcess(bot); }, 1000);
+                } else {
+                    socket.emit('feedback', { success: true, message: 'Configurações salvas com sucesso.' });
                 }
             }
         });
 
-        socket.on('admin-get-users', () => socket.emit('admin-users-list', Object.values(readDB(USERS_DB_PATH)).map(({ password, ...r }) => r)));
-
-        socket.on('admin-delete-user', ({ username }) => {
-            const users = readDB(USERS_DB_PATH);
-            delete users[username];
-            writeDB(USERS_DB_PATH, users);
-            socket.emit('admin-users-list', Object.values(users).map(({ password, ...r }) => r));
-        });
-
-        socket.on('admin-get-bots-for-user', ({ username }) => socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === username)));
-    }
-
-    socket.on('get-my-bots', () => {
-        socket.emit('initial-bots-list', Object.values(readDB(BOTS_DB_PATH)).filter(b => b.owner === user.username));
-    });
-
-    socket.on('get-my-groups', () => {
-        socket.emit('initial-groups-list', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === user.username));
-    });
-
-    socket.on('delete-group', ({ groupId }) => {
-        const groups = readDB(GROUPS_DB_PATH);
-        const group = groups[groupId];
-
-        if (!group) return socket.emit('feedback', { success: false, message: 'Grupo não encontrado.' });
-
-        const bots = readDB(BOTS_DB_PATH);
-        const bot = bots[group.managedByBot];
-        
-        const isBotOwner = bot && bot.owner === user.username;
-        const isGroupOwner = group.owner === user.username;
-
-        if (!user.isAdmin && !isBotOwner && !isGroupOwner) {
-            return socket.emit('feedback', { success: false, message: 'Permissão negada.' });
-        }
-
-        const botSessionName = group.managedByBot;
-        
-        delete groups[groupId];
-        writeDB(GROUPS_DB_PATH, groups);
-
-        socket.emit('group-list-updated', Object.values(groups).filter(g => g.owner === user.username));
-        socket.emit('feedback', { success: true, message: 'Grupo removido com sucesso.' });
-
-        if (activeBots[botSessionName]) {
-            console.log(`[DELETE GROUP] Reiniciando bot ${botSessionName} para aplicar remoção do grupo.`);
-            activeBots[botSessionName].process.kill('SIGINT');
-            delete activeBots[botSessionName];
-            
-            setTimeout(() => {
-                const currentBots = readDB(BOTS_DB_PATH);
-                if (currentBots[botSessionName]) {
-                    startBotProcess(currentBots[botSessionName]);
-                }
-            }, 1000);
-        }
-    });
-
-    socket.on('create-bot', (d) => {
-        const bots = readDB(BOTS_DB_PATH);
-        let users = readDB(USERS_DB_PATH);
-        const owner = (user.isAdmin && d.owner) ? d.owner : user.username;
-        const ownerData = users[owner];
-
-        if (bots[d.sessionName]) return socket.emit('feedback', { success: false, message: 'Nome de robô já em uso.' });
-
-        if (d.botType !== 'group' && Object.values(bots).filter(b => b.owner === owner && b.botType !== 'group').length >= (ownerData.botLimit || 1) && !ownerData.isAdmin) {
-            return socket.emit('feedback', { success: false, error: 'limit_reached' });
-        }
-
-        const now = new Date();
-        let trialEndDate = new Date(0);
-        let isTrial = false;
-        let feedbackMessage = 'Robô criado. Realize o pagamento para ativar.';
-
-        if (d.botType !== 'group') {
-            if (ownerData.salvagedTime && new Date(ownerData.salvagedTime.expiresAt) > now) {
-                trialEndDate = new Date(ownerData.salvagedTime.expiresAt);
-                isTrial = ownerData.salvagedTime.isTrial;
-                ownerData.salvagedTime = null;
-                users[owner] = ownerData;
-                writeDB(USERS_DB_PATH, users);
-                feedbackMessage = 'Bot criado utilizando o tempo restante do anterior.';
-            } else {
-                if (ownerData.isAdmin || !ownerData.trialUsed) {
-                    trialEndDate = new Date(now);
-                    trialEndDate.setHours(trialEndDate.getHours() + 24);
-                    isTrial = true;
-                    feedbackMessage = 'Robô criado e iniciando (Teste Grátis)...';
-                }
-            }
-        } else {
-            trialEndDate = new Date(now);
-            trialEndDate.setFullYear(trialEndDate.getFullYear() + 10);
-            isTrial = false;
-            feedbackMessage = 'Bot Agregador de Grupos criado com sucesso!';
-        }
-
-        const newBot = {
-            sessionName: d.sessionName,
-            prompt: d.prompt,
-            status: 'Offline',
-            owner,
-            activated: false,
-            isTrial: isTrial,
-            createdAt: now.toISOString(),
-            trialExpiresAt: trialEndDate.toISOString(),
-            ignoredIdentifiers: [],
-            botType: d.botType || 'individual'
-        };
-
-        bots[d.sessionName] = newBot;
-        writeDB(BOTS_DB_PATH, bots);
-        io.emit('bot-updated', newBot);
-
-        const canStart = new Date(newBot.trialExpiresAt) > new Date();
-        if (canStart) {
-            startBotProcess(newBot);
-        }
-        socket.emit('feedback', { success: true, message: feedbackMessage });
-    });
-
-    socket.on('start-bot', ({ sessionName, phoneNumber }) => {
-        const bots = readDB(BOTS_DB_PATH);
-        const bot = bots[sessionName];
-        if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
-
-        if (new Date(bot.trialExpiresAt) < new Date()) {
-            return socket.emit('feedback', { success: false, message: 'Robô expirado. Renove para ligar.' });
-        }
-
-        if (activeBots[sessionName]) return socket.emit('feedback', { success: false, message: 'O robô já está rodando.' });
-
-        startBotProcess(bot, phoneNumber);
-        socket.emit('feedback', { success: true, message: 'Iniciando o robô...' });
-    });
-
-    socket.on('stop-bot', ({ sessionName }) => {
-        if (activeBots[sessionName]) { activeBots[sessionName].process.kill('SIGINT'); delete activeBots[sessionName]; }
-        updateBotStatus(sessionName, 'Offline');
-        socket.emit('feedback', { success: true, message: 'Robô parado.' });
-    });
-
-    socket.on('delete-bot', ({ sessionName }) => {
-        let bots = readDB(BOTS_DB_PATH);
-        let users = readDB(USERS_DB_PATH);
-        const botToDelete = bots[sessionName];
-
-        if (!botToDelete || (!user.isAdmin && botToDelete.owner !== user.username)) return;
-
-        if (botToDelete.botType !== 'group') {
-            const owner = users[botToDelete.owner];
-            const expirationDate = new Date(botToDelete.trialExpiresAt);
-            if (owner && expirationDate > new Date()) {
-                owner.salvagedTime = {
-                    expiresAt: botToDelete.trialExpiresAt,
-                    isTrial: botToDelete.isTrial
-                };
-                users[botToDelete.owner] = owner;
-                writeDB(USERS_DB_PATH, users);
-                socket.emit('feedback', { success: true, message: 'Bot excluído. O tempo restante foi salvo para o próximo bot que você criar.' });
-            } else {
-                socket.emit('feedback', { success: true, message: 'Bot excluído.' });
-            }
-        } else {
-             socket.emit('feedback', { success: true, message: 'Bot Agregador excluído.' });
-        }
-
-        if (activeBots[sessionName]) {
-            activeBots[sessionName].process.kill('SIGINT');
-            delete activeBots[sessionName];
-        }
-        delete bots[sessionName];
-        writeDB(BOTS_DB_PATH, bots);
-        if (fs.existsSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`))) {
-            fs.rmSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`), { recursive: true, force: true });
-        }
-        io.emit('bot-deleted', { sessionName });
-    });
-
-    socket.on('update-bot', (d) => {
-        const bots = readDB(BOTS_DB_PATH);
-        const bot = bots[d.sessionName];
-
-        if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
-
-        if (bot) {
-            bot.prompt = d.newPrompt;
-            if (d.botType !== undefined) bot.botType = d.botType;
+        socket.on('update-ignored-identifiers', ({ sessionName, ignoredIdentifiers }) => {
+            const bots = readDB(BOTS_DB_PATH);
+            const bot = bots[sessionName];
+            if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
+            bot.ignoredIdentifiers = ignoredIdentifiers;
             writeDB(BOTS_DB_PATH, bots);
             io.emit('bot-updated', bot);
-
-            if (activeBots[d.sessionName]) {
-                try {
-                    activeBots[d.sessionName].process.kill('SIGINT');
-                } catch (e) {
-                    console.error(`Erro ao parar ${d.sessionName} para update:`, e);
-                }
-
-                delete activeBots[d.sessionName];
-
-                socket.emit('feedback', { success: true, message: 'Configurações salvas. Reiniciando o robô...' });
-
-                setTimeout(() => {
-                    startBotProcess(bot);
-                }, 1000);
-            } else {
-                socket.emit('feedback', { success: true, message: 'Configurações salvas com sucesso.' });
+            socket.emit('feedback', { success: true, message: 'Lista de ignorados salva. Reiniciando o bot...' });
+            if (activeBots[sessionName]) {
+                activeBots[sessionName].process.kill('SIGINT');
+                setTimeout(() => startBotProcess(bot), 1000);
             }
+        });
+    }
+
+    // --- MANIPULADOR DE ATIVAÇÃO DE GRUPO ---
+    socket.on('group-activation-request', ({ groupId, groupName, activationToken, botSessionName }) => {
+        console.log(`[SERVIDOR] Recebido 'group-activation-request' do bot ${botSessionName}.`);
+        
+        const tokenData = activationTokens[activationToken];
+
+        if (!tokenData || tokenData.expiresAt < Date.now()) {
+            console.error(`[SERVIDOR] Token inválido ou expirado.`);
+            // Envia feedback de FALHA para o bot
+            io.emit('group-activation-result', { 
+                success: false, 
+                groupId, 
+                botSessionName, 
+                message: 'Link de ativação expirado ou inválido.' 
+            });
+            return;
         }
-    });
+        
+        const { ownerEmail } = tokenData;
+        delete activationTokens[activationToken]; 
 
-    socket.on('update-ignored-identifiers', ({ sessionName, ignoredIdentifiers }) => {
-        const bots = readDB(BOTS_DB_PATH);
-        const bot = bots[sessionName];
+        const users = readDB(USERS_DB_PATH);
+        const groups = readDB(GROUPS_DB_PATH);
 
-        if (!bot || (!user.isAdmin && bot.owner !== user.username)) return;
-
-        bot.ignoredIdentifiers = ignoredIdentifiers;
-        writeDB(BOTS_DB_PATH, bots);
-
-        io.emit('bot-updated', bot);
-        socket.emit('feedback', { success: true, message: 'Lista de ignorados salva. Reiniciando o bot...' });
-
-        if (activeBots[sessionName]) {
-            activeBots[sessionName].process.kill('SIGINT');
-            setTimeout(() => startBotProcess(bot), 1000);
+        if (!users[ownerEmail]) {
+            io.emit('group-activation-result', { success: false, groupId, botSessionName, message: 'Usuário do token não encontrado.' });
+            return;
         }
+        if (groups[groupId]) {
+            io.to(ownerEmail.toLowerCase()).emit('feedback', { success: false, message: `O grupo "${groupName}" já está cadastrado.` });
+            io.emit('group-activation-result', { success: false, groupId, botSessionName, message: 'Grupo já cadastrado no painel.' });
+            return;
+        }
+
+        // CRIAÇÃO DO GRUPO COM 24H DE TESTE PARA QUE O BOT FUNCIONE IMEDIATAMENTE
+        const now = new Date();
+        const trialExpire = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 Horas
+
+        const newGroup = {
+            groupId: groupId,
+            groupName: groupName,
+            owner: ownerEmail,
+            managedByBot: botSessionName,
+            status: "active", // Define como ativo para o trial funcionar
+            createdAt: now.toISOString(),
+            expiresAt: trialExpire.toISOString()
+        };
+
+        groups[groupId] = newGroup;
+        writeDB(GROUPS_DB_PATH, groups);
+        console.log(`[SERVIDOR] Grupo '${groupName}' ativado (Trial 24h). Dono: ${ownerEmail}.`);
+
+        // 1. Notifica o Painel do Usuário
+        io.to(ownerEmail.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
+        io.to(ownerEmail.toLowerCase()).emit('feedback', { success: true, message: `Grupo "${groupName}" ativado com sucesso!` });
+
+        // 2. Notifica o Bot (index.js) para mandar as boas-vindas
+        io.emit('group-activation-result', { 
+            success: true, 
+            groupId: groupId, 
+            botSessionName: botSessionName,
+            expiresAt: newGroup.expiresAt,
+            message: 'Grupo ativado.'
+        });
     });
 });
-
-// --- CORREÇÃO CRUCIAL: Evento de Ativação de Grupo ---
-io.on('group-activation-request', ({ groupId, groupName, activationToken, botSessionName }) => {
-    console.log(`[SERVIDOR] 1. Evento 'group-activation-request' recebido do bot ${botSessionName}.`);
-    console.log(`[SERVIDOR]    - Token recebido: ${activationToken}`);
-
-    const tokenData = activationTokens[activationToken];
-
-    if (!tokenData || tokenData.expiresAt < Date.now()) {
-        console.error(`[SERVIDOR] ERRO: Token inválido ou expirado (${activationToken}). Ativação falhou.`);
-        return;
-    }
-    console.log(`[SERVIDOR] 2. Token validado com sucesso.`);
-
-    const { ownerEmail } = tokenData;
-    delete activationTokens[activationToken]; 
-    console.log(`[SERVIDOR] 3. Token associado ao usuário: ${ownerEmail}. Token invalidado.`);
-
-    const users = readDB(USERS_DB_PATH);
-    const groups = readDB(GROUPS_DB_PATH);
-
-    if (!users[ownerEmail]) {
-        console.error(`[SERVIDOR] ERRO: O usuário do token (${ownerEmail}) não foi encontrado no banco de dados.`);
-        return;
-    }
-    if (groups[groupId]) {
-        console.warn(`[SERVIDOR] AVISO: O grupo '${groupName}' (${groupId}) já existe no banco de dados.`);
-        // Envia feedback direto para a sala do usuário (minúsculo)
-        io.to(ownerEmail.toLowerCase()).emit('feedback', { success: false, message: `O grupo "${groupName}" já está na sua lista.` });
-        return;
-    }
-
-    const newGroup = {
-        groupId: groupId,
-        groupName: groupName,
-        owner: ownerEmail,
-        managedByBot: botSessionName,
-        status: "pending_payment",
-        createdAt: new Date().toISOString(),
-        expiresAt: null
-    };
-
-    groups[groupId] = newGroup;
-    writeDB(GROUPS_DB_PATH, groups);
-    console.log(`[SERVIDOR] 4. Grupo '${groupName}' salvo no groups.json.`);
-
-    // --- AQUI ESTÁ A MÁGICA: Envia para a sala do usuário (minúsculo) ---
-    console.log(`[SERVIDOR] 5. Enviando atualização para a sala do usuário: ${ownerEmail.toLowerCase()}`);
-    io.to(ownerEmail.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
-    io.to(ownerEmail.toLowerCase()).emit('feedback', { success: true, message: `Seu grupo "${groupName}" está pronto para ativação!` });
-});
-
 
 function startBotProcess(bot, phoneNumber = null) {
     const env = { ...process.env, API_KEYS_GEMINI: process.env.API_KEYS_GEMINI };
