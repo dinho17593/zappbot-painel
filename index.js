@@ -15,9 +15,14 @@ const io = require('socket.io-client');
 const nomeSessao = process.argv[2];
 const promptSistema = process.argv[3];
 const ignoredIdentifiersArg = process.argv[4] || '[]';
-const phoneNumberArg = (process.argv[5] && process.argv[5] !== 'null') ? process.argv[5] : null;
+let phoneNumberArg = (process.argv[5] && process.argv[5] !== 'null') ? process.argv[5] : null;
 const authorizedGroupsArg = process.argv[6] || '[]';
 const botType = process.argv[7] || 'individual';
+
+// Limpeza crítica do número de telefone para evitar erros do Baileys
+if (phoneNumberArg) {
+    phoneNumberArg = phoneNumberArg.replace(/[^0-9]/g, '');
+}
 
 const modeloGemini = 'gemini-flash-latest';
 
@@ -152,7 +157,7 @@ async function ligarBot() {
     const sock = makeWASocket({
         version,
         logger,
-        printQRInTerminal: false,
+        printQRInTerminal: !phoneNumberArg, // Importante: Não imprimir QR se estiver usando código
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -160,18 +165,23 @@ async function ligarBot() {
         syncFullHistory: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        browser: ["ZappBot", "Chrome", "1.0.0"],
+        // Configuração de navegador para evitar erros de pareamento
+        browser: ["Ubuntu", "Chrome", "20.0.04"], 
         getMessage: async () => ({ conversation: 'hello' })
     });
 
+    // Lógica de Pareamento por Código
     if (phoneNumberArg && !sock.authState.creds.me && !sock.authState.creds.registered) {
         console.log(`[${nomeSessao}] Solicitando código de pareamento para: ${phoneNumberArg}`);
+        
+        // Pequeno delay para garantir que o socket esteja pronto
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(phoneNumberArg);
                 console.log(`PAIRING_CODE:${code}`);
             } catch (err) {
                 console.error('Erro ao solicitar pairing code:', err);
+                console.log(`ERRO: Verifique se o número ${phoneNumberArg} está correto.`);
             }
         }, 3000);
     }
@@ -179,7 +189,7 @@ async function ligarBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
+        if (qr && !phoneNumberArg) {
             console.log(`QR_CODE:${qr}`);
         }
 
@@ -330,3 +340,4 @@ async function ligarBot() {
 }
 
 ligarBot().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
+
