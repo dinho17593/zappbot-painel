@@ -418,6 +418,18 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
     
+    // --- OUVINTE PARA ATUALIZAR CONFIGURAÇÕES DE GRUPO VIA BOT ---
+    socket.on('update-group-settings', (data) => {
+        // data: { groupId, settings: { antiLink: true/false } }
+        const groups = readDB(GROUPS_DB_PATH);
+        if (groups[data.groupId]) {
+            // Atualiza as configurações mesclando
+            groups[data.groupId] = { ...groups[data.groupId], ...data.settings };
+            writeDB(GROUPS_DB_PATH, groups);
+            console.log(`[CONFIG] Grupo ${data.groupId} atualizado:`, data.settings);
+        }
+    });
+
     if (user) {
         socket.join(user.username.toLowerCase());
         const uData = readDB(USERS_DB_PATH)[user.username];
@@ -432,7 +444,6 @@ io.on('connection', (socket) => {
             socket.on('admin-settings', (s) => socket.emit('admin-settings', readDB(SETTINGS_DB_PATH)));
             socket.on('save-settings', (ns) => { writeDB(SETTINGS_DB_PATH, ns); socket.emit('feedback', { success: true, message: 'Salvo' }); io.emit('public-prices', ns); });
 
-            // --- LÓGICA CORRIGIDA BOT (COM SUBTRAÇÃO DE MINUTOS) ---
             socket.on('admin-set-days', ({ sessionName, days }) => {
                 const bots = readDB(BOTS_DB_PATH);
                 const bot = bots[sessionName];
@@ -440,23 +451,17 @@ io.on('connection', (socket) => {
                 if (bot) {
                     const d = parseInt(days);
                     const now = new Date();
-                    
                     const newDate = new Date(now);
                     newDate.setDate(newDate.getDate() + d);
-                    
-                    // CORREÇÃO: Subtrai 10 minutos para evitar que "Math.ceil" do navegador arredonde para cima (Ex: 31 dias)
                     newDate.setMinutes(newDate.getMinutes() - 10);
-
                     bot.trialExpiresAt = newDate.toISOString();
                     bot.activated = true;
                     bot.isTrial = false;
-
                     writeDB(BOTS_DB_PATH, bots);
                     io.emit('bot-updated', bot);
                 }
             });
 
-            // --- LÓGICA CORRIGIDA GRUPO (COM SUBTRAÇÃO DE MINUTOS) ---
             socket.on('admin-set-group-days', ({ groupId, days }) => {
                 const groups = readDB(GROUPS_DB_PATH);
                 const group = groups[groupId];
@@ -464,13 +469,9 @@ io.on('connection', (socket) => {
                 if (group) {
                     const d = parseInt(days);
                     const now = new Date();
-                    
                     const baseDate = new Date(now);
                     baseDate.setDate(baseDate.getDate() + d);
-
-                    // CORREÇÃO: Subtrai 10 minutos
                     baseDate.setMinutes(baseDate.getMinutes() - 10);
-
                     group.expiresAt = baseDate.toISOString();
                     group.status = 'active'; 
 
@@ -715,6 +716,7 @@ io.on('connection', (socket) => {
             owner: ownerEmail,
             managedByBot: botSessionName,
             status: "active", // Define como ativo para o trial funcionar
+            antiLink: false, // Padrão Anti-Link desativado
             createdAt: now.toISOString(),
             expiresAt: trialExpire.toISOString()
         };
@@ -755,9 +757,10 @@ function startBotProcess(bot, phoneNumber = null) {
     let authorizedGroupsArg = '[]';
     if (bot.botType === 'group') {
         const allGroups = readDB(GROUPS_DB_PATH);
+        // PASSANDO TAMBÉM A CONFIGURAÇÃO ANTILINK
         const authorizedGroups = Object.values(allGroups)
             .filter(g => g.managedByBot === bot.sessionName && g.status === 'active')
-            .map(g => ({ groupId: g.groupId, expiresAt: g.expiresAt }));
+            .map(g => ({ groupId: g.groupId, expiresAt: g.expiresAt, antiLink: g.antiLink }));
         authorizedGroupsArg = JSON.stringify(authorizedGroups);
     }
     
