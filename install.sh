@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT 2: INSTALAÇÃO E CONFIGURAÇÃO COMPLETA (ATUALIZADO) ---
+# --- SCRIPT 2: INSTALAÇÃO E CONFIGURAÇÃO (FINAL) ---
 
 # Define a pasta correta
 TARGET_DIR="/var/www/bot-whatsapp"
@@ -35,8 +35,7 @@ fi
 # Pergunta 3: E-mail para SSL
 read -p "Digite seu E-MAIL (para o certificado SSL): " EMAIL_SSL
 
-# --- Criação do "Slug" para o package.json ---
-# Transforma "Bot Atendimento" em "bot-atendimento" (minúsculo, sem espaços)
+# Cria o "Slug" para o package.json (transforma "Zap Loja" em "zap-loja")
 APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+\|-+$//g' | tr A-Z a-z)
 
 echo -e "${YELLOW}Configurando sistema para: $APP_NAME ($DOMAIN)...${NC}"
@@ -51,43 +50,58 @@ sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot 
 # --- 3. INSTALAÇÃO DAS BIBLIOTECAS NODE.JS ---
 echo -e "${YELLOW}Instalando bibliotecas do projeto...${NC}"
 
-# Limpeza preventiva
+# Remove node_modules antigos para garantir instalação limpa
 rm -rf node_modules package-lock.json
 
-# Garante que existe um package.json básico se o zip não trouxe
+# Se não existir package.json, cria um básico
 if [ ! -f "package.json" ]; then
     npm init -y
 fi
 
-# Instala TODAS as dependências necessárias
-npm install express socket.io @whiskeysockets/baileys qrcode-terminal pino \
-    @google/generative-ai dotenv telegraf axios archiver adm-zip multer \
-    session-file-store express-session cookie-parser bcrypt passport \
-    passport-google-oauth20 mercadopago socket.io-client
+# Instala exatamente as dependências do seu package.json + qrcode-terminal (debug)
+npm install \
+    @google/generative-ai \
+    @whiskeysockets/baileys \
+    adm-zip \
+    archiver \
+    axios \
+    bcrypt \
+    cookie-parser \
+    dotenv \
+    express \
+    express-session \
+    mercadopago \
+    multer \
+    passport \
+    passport-google-oauth20 \
+    passport-local \
+    pino \
+    session-file-store \
+    socket.io \
+    socket.io-client \
+    telegraf \
+    qrcode-terminal
 
 # --- 4. SUBSTITUIÇÃO DE MARCA E DOMÍNIO (FIND & REPLACE) ---
 echo -e "${YELLOW}Personalizando arquivos com o nome '$APP_NAME'...${NC}"
 
 # A. Substituição do DOMÍNIO (zappbot.shop -> dominio do usuario)
-# Varre arquivos .js, .html e .json
 grep -rl "zappbot.shop" . | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
 
-# B. Substituição do NOME VISUAL ("ZappBot" -> Nome escolhido)
-# Afeta index.html (título, meta tags, cabeçalho) e logs do server
+# B. Substituição do NOME VISUAL ("ZappBot" -> Nome escolhido) no HTML e JS
 grep -rl "ZappBot" . | xargs sed -i "s/ZappBot/$APP_NAME/g" 2>/dev/null
 
-# C. Substituição do SLUG no package.json ("zappbot-painel" -> nome-formatado)
-# Isso evita avisos do NPM sobre nome de pacote inválido
+# C. Ajuste do package.json (Nome do pacote)
+# Substitui o nome original (zappbot-shopp) pelo slug do cliente
 if [ -f "package.json" ]; then
-    # Tenta substituir variações comuns que possam vir no zip
-    sed -i "s/\"name\": \"zappbot-painel\"/\"name\": \"$APP_SLUG\"/g" package.json
     sed -i "s/\"name\": \"zappbot-shopp\"/\"name\": \"$APP_SLUG\"/g" package.json
+    sed -i "s/\"name\": \"zappbot-painel\"/\"name\": \"$APP_SLUG\"/g" package.json
 fi
 
-# D. Ajuste no manifest.json (se existir) para o PWA
+# D. Ajuste no manifest.json (PWA)
 if [ -f "manifest.json" ]; then
     sed -i "s/ZappBot/$APP_NAME/g" manifest.json
-    sed -i "s/zappbot-painel/$APP_SLUG/g" manifest.json
+    sed -i "s/zappbot-shopp/$APP_SLUG/g" manifest.json
 fi
 
 # Renomeia app.js para server.js se necessário (padronização)
@@ -102,11 +116,12 @@ for db in users.json bots.json groups.json settings.json; do
     if [ ! -f "$db" ]; then echo "{}" > "$db"; fi
 done
 
-# Permissões completas para evitar erro de EACCES
+# Permissões completas
 chmod -R 777 uploads sessions auth_sessions *.json
 
 # --- 6. CONFIGURAÇÃO DO .ENV ---
 echo -e "${YELLOW}Configurando arquivo .env...${NC}"
+# Backup se já existir
 if [ -f ".env" ]; then mv .env .env.bkp; fi
 
 cat > .env <<EOF
@@ -151,7 +166,6 @@ EOF
 # Link simbólico e restart
 ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-# Remove configuração antiga se tiver nome diferente
 rm -f /etc/nginx/sites-available/zappbot 
 rm -f /etc/nginx/sites-enabled/zappbot
 
@@ -171,6 +185,5 @@ echo "---------------------------------------------------"
 echo "Sistema: $APP_NAME"
 echo "Acesse: https://$DOMAIN"
 echo "---------------------------------------------------"
-echo "👉 Próximo passo: Edite o arquivo .env com suas chaves reais."
-echo "Comando: nano $TARGET_DIR/.env"
+echo "👉 Edite o .env: nano $TARGET_DIR/.env"
 echo "---------------------------------------------------"
