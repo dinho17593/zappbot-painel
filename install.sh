@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT DE CONFIGURAÇÃO (CORRIGIDO E SEGURO) ---
+# --- SCRIPT DE CONFIGURAÇÃO (PASTE FULL .ENV) ---
 
 TARGET_DIR="/var/www/bot-whatsapp"
 
@@ -8,104 +8,153 @@ TARGET_DIR="/var/www/bot-whatsapp"
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${GREEN}--- CONFIGURANDO SERVIDOR ---${NC}"
 
 cd "$TARGET_DIR" || exit 1
 
-# --- 1. DADOS DO USUÁRIO ---
-echo "---------------------------------------------------"
-read -p "Nome do Sistema (ex: ZapBot): " APP_NAME
+# ===================================================
+# 1. COLETA DE DADOS INTERATIVA
+# ===================================================
+echo -e "${BLUE}---------------------------------------------------${NC}"
+echo -e "${BLUE}       DADOS DO SISTEMA E PERSONALIZAÇÃO           ${NC}"
+echo -e "${BLUE}---------------------------------------------------${NC}"
+
+read -p "1. Nome do Sistema (ex: ZapBot): " APP_NAME
 if [ -z "$APP_NAME" ]; then APP_NAME="ZappBot"; fi
 
-read -p "Seu Domínio (ex: site.com): " DOMAIN
+read -p "2. Seu Domínio (SEM http/www, ex: painel.site.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
-    echo -e "${RED}Domínio é obrigatório!${NC}"
+    echo -e "${RED}Erro: Domínio é obrigatório!${NC}"
     exit 1
 fi
 
-read -p "Seu E-mail (para SSL): " EMAIL_SSL
+read -p "3. Seu E-mail (para o certificado SSL): " EMAIL_SSL
 
-# Cria slug (ex: Zap Bot -> zap-bot) para o package.json
+echo ""
+echo -e "${YELLOW}--- PERSONALIZAÇÃO VISUAL (LOGO) ---${NC}"
+echo "Cole o LINK da sua logo (Dropbox/Imgur/Direto)."
+echo "Deixe em branco para usar a padrão."
+read -p "URL da Logo: " LOGO_URL
+
+echo ""
+echo -e "${YELLOW}--- ARQUIVO .ENV COMPLETO ---${NC}"
+echo -e "${BLUE}Cole abaixo o conteúdo INTEIRO do seu arquivo .env:${NC}"
+echo "(Inclua todas as chaves do Google, Gemini, etc)"
+echo -e "${RED}>>> Quando terminar de colar, aperte ENTER, digite FIM e aperte ENTER novamente.${NC}"
+echo "---------------------------------------------------"
+
+# Lógica para ler multiplas linhas até encontrar a palavra FIM
+rm -f .env # Garante que está vazio
+touch .env
+
+while IFS= read -r line; do
+    if [[ "$line" == "FIM" ]]; then
+        break
+    fi
+    echo "$line" >> .env
+done
+
+echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
+
+# Cria slug para o package.json
 APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+\|-+$//g' | tr A-Z a-z)
 
-# --- 2. PACOTES DO LINUX ---
-echo -e "${YELLOW}Instalando dependências do sistema...${NC}"
+# ===================================================
+# 2. INSTALAÇÃO DO SISTEMA
+# ===================================================
+echo -e "${YELLOW}Instalando dependências do Linux...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get update -qq
-# Adiciona ffmpeg e build-essential
+# Instala ffmpeg para processar a imagem da logo e certbot
 sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot python3-certbot-nginx -qq
 
-# --- 3. PACOTES DO NODE.JS ---
-echo -e "${YELLOW}Instalando dependências do Node.js...${NC}"
+# ===================================================
+# 3. INSTALAÇÃO DO NODE.JS
+# ===================================================
+echo -e "${YELLOW}Instalando módulos do Painel...${NC}"
 rm -rf node_modules package-lock.json
 
 if [ ! -f "package.json" ]; then npm init -y; fi
 
-# Instala exatamente o que o projeto precisa
 npm install \
     @google/generative-ai @whiskeysockets/baileys adm-zip archiver axios \
     bcrypt cookie-parser dotenv express express-session mercadopago multer \
     passport passport-google-oauth20 passport-local pino session-file-store \
     socket.io socket.io-client telegraf qrcode-terminal
 
-# --- 4. PERSONALIZAÇÃO (VISUAL APENAS) ---
-echo -e "${YELLOW}Aplicando nome da marca...${NC}"
+# ===================================================
+# 4. PROCESSAMENTO DE IMAGENS E MARCA
+# ===================================================
+echo -e "${YELLOW}Aplicando personalização visual...${NC}"
 
-# Apenas no Front-end e Manifest (Seguro)
+# A. Substituição de textos (Nome e Domínio)
 grep -rl "ZappBot" index.html manifest.json | xargs sed -i "s/ZappBot/$APP_NAME/g" 2>/dev/null
 grep -rl "zappbot.shop" index.html | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
 
-# Ajusta package.json
+# B. Download e Conversão da Logo (Se fornecida)
+if [ ! -z "$LOGO_URL" ]; then
+    echo "Processando logo..."
+    LOGO_URL=$(echo "$LOGO_URL" | sed 's/dl=0/dl=1/g') # Fix Dropbox
+    
+    wget -q "$LOGO_URL" -O logo_temp
+    
+    if [ -s logo_temp ]; then
+        # Redimensiona usando FFmpeg
+        ffmpeg -y -i logo_temp -vf scale=192:192 icon-192.png -loglevel error
+        ffmpeg -y -i logo_temp -vf scale=512:512 icon-512.png -loglevel error
+        cp icon-192.png favicon.ico
+        rm logo_temp
+        echo "✅ Logos atualizadas!"
+    else
+        echo -e "${RED}Falha ao baixar logo.${NC}"
+    fi
+fi
+
+# C. Ajustes técnicos no package.json
 if [ -f "package.json" ]; then
     sed -i "s/\"name\": \"zappbot-shopp\"/\"name\": \"$APP_SLUG\"/g" package.json
     sed -i "s/\"name\": \"zappbot-painel\"/\"name\": \"$APP_SLUG\"/g" package.json
 fi
 
-# Padroniza arquivo principal
 if [ -f "app.js" ]; then mv app.js server.js; fi
 
-# --- 5. ESTRUTURA E PERMISSÕES ---
+# ===================================================
+# 5. ESTRUTURA E PERMISSÕES
+# ===================================================
 mkdir -p uploads sessions auth_sessions
 for db in users.json bots.json groups.json settings.json; do
     if [ ! -f "$db" ]; then echo "{}" > "$db"; fi
 done
 chmod -R 777 uploads sessions auth_sessions *.json
 
-# --- 6. ARQUIVO .ENV (CONFIGURA O BACKEND) ---
-echo -e "${YELLOW}Criando configuração (.env)...${NC}"
-# Aqui definimos o domínio para o server.js ler, sem precisar editar o código JS
-cat > .env <<EOF
-GOOGLE_CLIENT_ID="COLE_AQUI"
-GOOGLE_CLIENT_SECRET="COLE_AQUI"
-GOOGLE_CALLBACK_URL="https://${DOMAIN}/auth/google/callback"
-SESSION_SECRET="secret-$(openssl rand -hex 16)"
-API_KEYS_GEMINI="COLE_SUA_CHAVE_GEMINI"
-EOF
-
-# --- 7. INICIAR COM PM2 ---
-echo -e "${YELLOW}Iniciando aplicação...${NC}"
+# ===================================================
+# 6. INICIALIZAÇÃO (PM2)
+# ===================================================
+echo -e "${YELLOW}Iniciando servidor...${NC}"
 npm install pm2 -g
 pm2 delete painel >/dev/null 2>&1
 pm2 start server.js --name "painel"
 pm2 save
 pm2 startup
 
-# --- 8. CONFIGURAÇÃO NGINX ---
+# ===================================================
+# 7. NGINX E SSL
+# ===================================================
 echo -e "${YELLOW}Configurando Proxy Nginx...${NC}"
 NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
 
+# Configuração SEM WWW para evitar erro de DNS em subdomínios
 cat > $NGINX_CONF <<EOF
 server {
-    server_name ${DOMAIN} www.${DOMAIN};
-
+    server_name ${DOMAIN};
     root /var/www/bot-whatsapp;
-
+    
     location ~ /.well-known/acme-challenge {
         allow all;
     }
-
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -128,18 +177,16 @@ rm -f /etc/nginx/sites-enabled/zappbot
 
 sudo nginx -t && sudo systemctl restart nginx
 
-# --- 9. SSL E FIREWALL ---
 if [ ! -z "$EMAIL_SSL" ]; then
-    echo -e "${YELLOW}Configurando Firewall e SSL...${NC}"
-    # Abre portas
+    echo -e "${YELLOW}Gerando certificado SSL...${NC}"
     sudo ufw allow 80/tcp
     sudo ufw allow 443/tcp
     sudo ufw allow 3000/tcp
     
-    # Gera certificado
-    sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
+    # Gera SSL APENAS para o domínio principal (sem www)
+    sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
 else
-    echo -e "${RED}Sem e-mail, SSL pulado.${NC}"
+    echo -e "${RED}E-mail não informado. SSL ignorado.${NC}"
 fi
 
 echo "---------------------------------------------------"
