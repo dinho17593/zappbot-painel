@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -7,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Painel ZappBot</title>
     
-    <!-- PWA Meta Tags -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="theme-color" content="#121214">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,28 +21,24 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-    /* Importando fontes modernas */
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
     :root {
-        /* Paleta Dark Premium (Zinc/Slate) */
         --bg-body: #09090b;
-        --bg-card: #18181b; /* Card ligeiramente mais claro que o fundo */
+        --bg-card: #18181b; 
         --bg-input: #09090b;
-        --bg-sidebar: rgba(24, 24, 27, 0.85); /* Com transparência */
+        --bg-sidebar: rgba(24, 24, 27, 0.85); 
         
         --text-main: #f4f4f5;
         --text-muted: #a1a1aa;
-        --border: rgba(255, 255, 255, 0.08); /* Borda sutil e elegante */
+        --border: rgba(255, 255, 255, 0.08); 
         
-        /* Cores de Ação */
-        --primary: #6366f1; /* Indigo moderno ao invés de cinza */
+        --primary: #6366f1; 
         --primary-hover: #818cf8; 
         --primary-glow: rgba(99, 102, 241, 0.4);
 
         --purple-dark: #2e1065;   
         
-        /* Status Colors (Pastel/Neon) */
         --green: #10b981;
         --red: #f43f5e;
         --blue: #3b82f6;
@@ -53,7 +47,7 @@
         --yellow: #f59e0b;
         --cyan: #06b6d4;
         
-        --header-height: 70px; /* Um pouco mais alto para elegância */
+        --header-height: 70px;
         --radius-sm: 8px;
         --radius-md: 12px;
         --radius-lg: 24px;
@@ -65,7 +59,6 @@
         -webkit-tap-highlight-color: transparent; 
     }
 
-    /* Scrollbar Personalizada Fina */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-body); }
     ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
@@ -83,7 +76,6 @@
         -webkit-font-smoothing: antialiased;
     }
     
-    /* PWA Update Bar - Estilo Flutuante */
     #pwa-update-bar {
         display: none;
         position: fixed;
@@ -123,7 +115,6 @@
     .hidden { display: none !important; }
     .text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
-    /* Inputs Modernizados */
     .input-group { margin-bottom: 25px; position: relative; } 
     
     .input-label { 
@@ -158,7 +149,6 @@
     }
     input::placeholder { color: #52525b; }
 
-    /* Header Glassmorphism */
     header { 
         position: sticky; 
         top: 0; 
@@ -245,7 +235,6 @@
     }
     .limit-badge:hover { background: rgba(245, 158, 11, 0.2); }
 
-    /* Sidebar Styles */
     .sidebar-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.6); z-index: 1000; display: none;
@@ -364,7 +353,6 @@
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); 
     }
 
-    /* Grid de Bots - Visual Cards */
     #bots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 25px; margin-top: 25px; }
     
     .bot-card { 
@@ -528,7 +516,6 @@
     .btn-act-pay { color: var(--cyan); border-color: rgba(6, 182, 212, 0.2); background: rgba(6, 182, 212, 0.05); }
     .btn-act-pay:hover { background: rgba(6, 182, 212, 0.15); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
 
-    /* Modais Elegantes */
     .modal-overlay { 
         display: none; 
         position: fixed; 
@@ -668,7 +655,7 @@
 
     .qr-wrapper {
         background: #fff;
-        padding: 20px;
+        padding: 20px; 
         border-radius: 16px;
         margin: 20px auto;
         display: flex;
@@ -791,7 +778,6 @@
     .platform-icon-wa { color: var(--whatsapp-green); filter: drop-shadow(0 0 5px rgba(37, 211, 102, 0.3)); }
     .platform-icon-tg { color: var(--telegram-blue); filter: drop-shadow(0 0 5px rgba(34, 158, 217, 0.3)); }
 
-    /* Nested Groups Styles */
     .bot-groups-container {
         margin-top: 20px;
         border-top: 1px solid var(--border);
@@ -845,7 +831,6 @@
     }
     .btn-nested-action:hover { transform: translateY(-2px); filter: brightness(1.1); }
 
-    /* Empty State */
     .empty-state {
         text-align: center;
         padding: 60px 20px;
@@ -858,6 +843,46 @@
     .empty-state i { font-size: 3.5rem; margin-bottom: 20px; color: var(--primary); opacity: 0.4; }
     .empty-state h3 { color: var(--text-main); margin: 0 0 12px 0; font-size: 1.2rem; }
     .empty-state p { font-size: 0.95rem; margin: 0; max-width: 400px; margin: 0 auto; }
+
+    .type-select-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 20px;
+    }
+    .type-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 25px 15px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    .type-card:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: var(--primary);
+        transform: translateY(-3px);
+    }
+    .type-card i {
+        font-size: 2rem;
+        color: var(--primary);
+        margin-bottom: 5px;
+    }
+    .type-card h4 {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--text-main);
+    }
+    .type-card p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
 </style>
 </head>
 <body>
@@ -869,7 +894,6 @@
 
     <div id="feedback-area"></div>
 
-    <!-- Sidebar Overlay & Menu -->
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div id="sidebar" class="sidebar">
         <div class="sidebar-header">
@@ -893,6 +917,7 @@
                 <h2 style="margin: 5px 0 0 0; font-size: 1.5rem;">ZappBot</h2>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">Automação Simplificada</p>
             </div>
+            
             <div id="login-form-container">
                 <form id="login-form">
                     <div class="input-group" style="margin-bottom:15px;"><label class="input-label">Seu Email ou Usuário</label><input type="text" id="login-username" required></div>
@@ -901,7 +926,26 @@
                 </form>
                 <div class="auth-divider"><span>ou continue com</span></div>
                 <a href="/auth/google" class="btn-google"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg> Google</a>
-                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem;"><a href="#" style="color: var(--text-muted); text-decoration: none;" onclick="toggleAuthForms()">Voltar para Login</a></p>
+                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem;">
+                    Não tem conta? <a href="#" style="color: var(--primary); text-decoration: none; font-weight: 600;" onclick="toggleAuthForms()">Criar conta</a>
+                </p>
+            </div>
+
+            <div id="register-form-container" class="hidden">
+                <form id="register-form">
+                    <div class="input-group" style="margin-bottom:15px;">
+                        <label class="input-label">Escolha um Usuário</label>
+                        <input type="text" id="reg-username" required>
+                    </div>
+                    <div class="input-group" style="margin-bottom:20px;">
+                        <label class="input-label">Escolha uma Senha</label>
+                        <input type="password" id="reg-password" required>
+                    </div>
+                    <button type="submit" id="btn-register-submit" class="btn-primary">Criar Conta</button>
+                </form>
+                <p class="text-center" style="margin-top: 20px; font-size: 0.9rem;">
+                    Já tem conta? <a href="#" style="color: var(--primary); text-decoration: none; font-weight: 600;" onclick="toggleAuthForms()">Fazer Login</a>
+                </p>
             </div>
         </div>
     </div>
@@ -911,7 +955,6 @@
             <div class="nav-bar">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <button id="nav-back-btn" class="nav-btn hidden" onclick="goBackToAdminHome()"><i class="fas fa-chevron-left"></i></button>
-                    <!-- Hamburger Menu for Admin -->
                     <button id="admin-menu-btn" class="nav-btn hidden" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
                 </div>
                 
@@ -925,7 +968,6 @@
         </header>
         <div class="container">
             
-            <!-- MAIN DASHBOARD VIEW (BOTS & GROUPS) -->
             <div id="user-view">
                 <div id="view-header" style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -945,14 +987,12 @@
                 </div>
             </div>
 
-            <!-- ADMIN SETTINGS VIEW (HIDDEN BY DEFAULT) -->
             <div id="admin-settings-view" class="hidden">
                 <div id="view-header-admin" style="margin: 15px 0;">
                     <h2 style="font-size: 1.2rem; margin: 0;">Administração</h2>
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Configurações globais e gerenciamento de usuários.</p>
                 </div>
 
-                <!-- BACKUP SECTION -->
                 <div class="form-section" style="border-color: var(--yellow);">
                     <h4 style="color: var(--yellow); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-database"></i> Backup e Restauração</h4>
                     <p class="help-text">Baixe um backup completo dos dados (Usuários, Bots, Grupos e Configurações) para segurança. As sessões do WhatsApp (QR Codes) não são incluídas para manter o arquivo leve.</p>
@@ -1004,50 +1044,67 @@
         </div>
     </div>
 
-    <!-- CREATE BOT MODAL -->
     <div id="create-bot-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> Criar Novo Robô</h3>
                 <i class="fas fa-times" onclick="closeCreateModal()" style="padding:10px; cursor:pointer;"></i>
             </div>
-            <form id="add-bot-form">
-                <div class="input-group">
-                    <label for="botPlatform" class="input-label">Plataforma</label>
-                    <select id="botPlatform" onchange="togglePlatformFields()">
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="telegram">Telegram</option>
-                    </select>
-                </div>
 
-                <div class="input-group">
-                    <label for="sessionName" class="input-label">1. Nome de Identificação</label>
-                    <span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span>
-                    <input type="text" id="sessionName" required placeholder="Ex: Bot_Vendas_01">
-                </div>
-                
-                <!-- Campo Token Telegram (Oculto por padrão) -->
-                <div id="telegram-token-group" class="input-group hidden">
-                    <label for="telegramToken" class="input-label">Token do Bot (Telegram)</label>
-                    <span class="help-text">Cole o token fornecido pelo @BotFather.</span>
-                    <input type="text" id="telegramToken" placeholder="Ex: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
-                </div>
-
-                <div class="input-group">
-                    <label for="prompt" class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt()">Ver Exemplo</span></label>
-                    <span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span>
-                    <textarea id="prompt" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea>
-                </div>
-                
-                <div class="checkbox-group">
-                    <input type="checkbox" id="botTypeGroup">
-                    <div>
-                        <label for="botTypeGroup">Ativar Modo Grupo</label>
-                        <div class="help-text">Este bot atuará em múltiplos grupos (cobrança por grupo).</div>
+            <div id="create-step-1">
+                <p style="color: var(--text-muted); font-size: 0.9rem; text-align: center;">Qual será a função deste robô?</p>
+                <div class="type-select-grid">
+                    <div class="type-card" onclick="selectBotType('individual')">
+                        <i class="fas fa-user-shield"></i>
+                        <h4>Atendimento Privado</h4>
+                        <p>Responde clientes no PV (1 a 1).</p>
+                    </div>
+                    <div class="type-card" onclick="selectBotType('group')">
+                        <i class="fas fa-users"></i>
+                        <h4>Gestão de Grupos</h4>
+                        <p>Administra e responde em grupos.</p>
                     </div>
                 </div>
-                <button type="submit" class="btn-primary" id="create-bot-btn" style="margin-top: 20px;">Salvar e Criar Robô</button>
-            </form>
+            </div>
+
+            <div id="create-step-2" class="hidden">
+                <form id="add-bot-form">
+                    <input type="hidden" id="selectedBotType" value="individual">
+                    
+                    <div class="input-group">
+                        <label for="botPlatform" class="input-label">Plataforma</label>
+                        <select id="botPlatform" onchange="togglePlatformFields()">
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="telegram">Telegram</option>
+                        </select>
+                    </div>
+
+                    <div id="telegram-token-group" class="input-group hidden" style="display: none;">
+                        <label for="telegramToken" class="input-label">Token do Bot (Telegram)</label>
+                        <span class="help-text">Cole o token fornecido pelo @BotFather.</span>
+                        <input type="text" id="telegramToken" placeholder="Ex: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="sessionName" class="input-label">1. Nome de Identificação</label>
+                        <span class="help-text">Um nome curto para você identificar este bot (ex: Loja_Centro). Sem espaços.</span>
+                        <input type="text" id="sessionName" required placeholder="Ex: Bot_Vendas_01">
+                    </div>
+                    
+                    <div id="prompt-container" class="input-group">
+                        <label for="prompt" class="input-label">2. Personalidade do Robô <span class="example-link" onclick="fillExamplePrompt()">Ver Exemplo</span></label>
+                        <span class="help-text">Explique como ele deve agir. Diga quem ele é, o que vende e como deve responder.</span>
+                        <textarea id="prompt" rows="6" required placeholder="Ex: Você é um assistente virtual da Loja X..."></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="button" class="btn-primary" onclick="backToBotTypeSelect()" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); width: auto;">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <button type="submit" class="btn-primary" id="create-bot-btn" style="flex: 1;">Salvar e Criar Robô</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1091,7 +1148,6 @@
         </div>
     </div>
 
-    <!-- NOVO MODAL: EDITAR GRUPO -->
     <div id="group-edit-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; margin-bottom:15px;"><h3>Configurar Grupo</h3><i class="fas fa-times" onclick="document.getElementById('group-edit-modal').style.display='none'" style="padding:10px; cursor:pointer;"></i></div>
@@ -1270,7 +1326,7 @@
         let socket;
         let currentUser = {}; 
         let botsData = {}; 
-        let groupsData = {}; // Store groups globally
+        let groupsData = {}; 
         let viewedUser = null;
         let publicPrices = {};
 
@@ -1327,7 +1383,6 @@
             document.getElementById('dashboard-container').classList.remove('hidden');
             document.getElementById('user-display-name').textContent = user.username;
             
-            // Show hamburger menu only for admin
             if (user.isAdmin) {
                 document.getElementById('admin-menu-btn').classList.remove('hidden');
             } else {
@@ -1416,6 +1471,14 @@
             }, 'btn-login-submit'); 
         };
 
+        document.getElementById('register-form').onsubmit = (e) => {
+            e.preventDefault();
+            handleAuth('/register', {
+                username: document.getElementById('reg-username').value,
+                password: document.getElementById('reg-password').value
+            }, 'btn-register-submit');
+        };
+
         function showFeedback(success, msg) {
             const feedbackArea = document.getElementById('feedback-area');
             feedbackArea.textContent = msg;
@@ -1440,17 +1503,46 @@
             const tokenGroup = document.getElementById('telegram-token-group');
             if (platform === 'telegram') {
                 tokenGroup.classList.remove('hidden');
+                tokenGroup.style.display = 'block';
             } else {
                 tokenGroup.classList.add('hidden');
+                tokenGroup.style.display = 'none';
             }
         }
 
         function openCreateModal() {
+            document.getElementById('create-step-1').classList.remove('hidden');
+            document.getElementById('create-step-2').classList.add('hidden');
             document.getElementById('create-bot-modal').style.display = 'flex';
         }
 
         function closeCreateModal() {
             document.getElementById('create-bot-modal').style.display = 'none';
+        }
+
+        function selectBotType(type) {
+            document.getElementById('selectedBotType').value = type;
+            
+            const promptContainer = document.getElementById('prompt-container');
+            const promptInput = document.getElementById('prompt');
+            
+            if (type === 'group') {
+                promptContainer.classList.add('hidden');
+                promptInput.required = false;
+            } else {
+                promptContainer.classList.remove('hidden');
+                promptInput.required = true;
+            }
+
+            document.getElementById('create-step-1').classList.add('hidden');
+            document.getElementById('create-step-2').classList.remove('hidden');
+            
+            togglePlatformFields();
+        }
+
+        function backToBotTypeSelect() {
+            document.getElementById('create-step-2').classList.add('hidden');
+            document.getElementById('create-step-1').classList.remove('hidden');
         }
 
         function initializeSocket() {
@@ -1461,12 +1553,10 @@
                 currentUser = data;
                 updateUserLimitUI(data.botLimit || 1);
 
-                // Always get bots for the current user (admin or not)
                 socket.emit('get-my-bots');
                 socket.emit('get-my-groups');
 
                 if (currentUser.isAdmin) {
-                    // Load admin data but keep view hidden until navigated
                     socket.emit('admin-get-users');
                     socket.emit('admin-settings');
                 }
@@ -1495,7 +1585,6 @@
                     `;
                 } else {
                     bots.forEach(renderBotCard);
-                    // Re-render groups if they arrived before bots
                     updateAllBotGroupCounts();
                 }
             });
@@ -1515,7 +1604,6 @@
                 if (currentUser.isAdmin && viewedUser && bot.owner !== viewedUser) return;
                 
                 if (currentUser.isAdmin && !viewedUser && bot.owner === currentUser.username) {
-                    // Admin viewing their own bots
                 } else if (currentUser.isAdmin && !viewedUser && bot.owner !== currentUser.username) {
                     return; 
                 }
@@ -1526,19 +1614,16 @@
                     btn.innerHTML = 'Salvar e Criar Robô';
                 }
                 
-                // Remove empty state if it exists
                 const emptyState = document.querySelector('.empty-state');
                 if (emptyState) emptyState.remove();
 
                 renderBotCard(bot); 
-                // Ensure groups are re-rendered inside the updated card
                 renderGroupsForBot(bot.sessionName);
             });
             socket.on('bot-deleted', (d) => { 
                 const el = document.getElementById(`bot-${d.sessionName}`); 
                 if(el) el.remove(); 
                 
-                // Check if grid is empty
                 const grid = document.getElementById('bots-grid');
                 if (grid.children.length === 0) {
                     grid.innerHTML = `
@@ -1656,6 +1741,25 @@
                    }
                 }
             });
+            
+            socket.on('group-activation-result', (data) => {
+                if (data.success) {
+                    const linkModal = document.getElementById('activation-link-modal');
+                    if(linkModal) linkModal.style.display = 'none';
+
+                    setTimeout(() => {
+                        let found = false;
+                        Object.values(groupsData).forEach(list => {
+                            if (list.find(g => g.groupId === data.groupId)) found = true;
+                        });
+
+                        if (found) {
+                            showFeedback(true, 'Grupo ativado! Configure agora.');
+                            openGroupEdit(data.groupId);
+                        }
+                    }, 500);
+                }
+            });
 
             socket.on('feedback', (d) => {
                 if(!d.success && d.error === 'limit_reached') {
@@ -1667,12 +1771,10 @@
                     if (d.success && d.message.includes('ativado') || d.message.includes('pronto')) {
                         socket.emit('get-my-groups');
                     }
-                    // Re-enable button if error
                     if (!d.success) {
                         const btn = document.getElementById('create-bot-btn');
                         btn.disabled = false; btn.innerHTML = 'Salvar e Criar Robô';
                     } else {
-                        // Success - close modal
                         closeCreateModal();
                         const btn = document.getElementById('create-bot-btn');
                         btn.disabled = false; btn.innerHTML = 'Salvar e Criar Robô';
@@ -1839,7 +1941,6 @@
 
             const platformIcon = isTelegram ? '<i class="fab fa-telegram platform-icon-tg"></i>' : '<i class="fab fa-whatsapp platform-icon-wa"></i>';
 
-            // Groups Section inside Bot Card
             let groupsSection = '';
             if (isGroupBot) {
                 groupsSection = `
@@ -1849,7 +1950,6 @@
                             <i class="fas fa-chevron-down"></i>
                         </button>
                         <div id="groups-container-${bot.sessionName}" class="bot-groups-container">
-                            <!-- Groups will be rendered here -->
                         </div>
                     </div>
                 `;
@@ -1970,7 +2070,6 @@
                     actionButton = `<button class="btn-nested-action" style="background:rgba(255,255,255,0.1); color:#fff;" onclick="openPay(null, '${group.groupId}', '${group.groupName}')"><i class="fas fa-plus"></i> Estender</button>`;
                 }
 
-                // Botões de controle individual do grupo
                 const editButton = `<button class="btn-nested-action" style="background:rgba(255,255,255,0.1); color:#fff;" onclick="openGroupEdit('${group.groupId}')"><i class="fas fa-pen"></i> Config</button>`;
                 
                 let toggleButton = '';
@@ -2026,7 +2125,6 @@
         }
 
         function openGroupEdit(groupId) {
-            // Encontrar o grupo nos dados globais
             let group = null;
             Object.values(groupsData).forEach(list => {
                 const found = list.find(g => g.groupId === groupId);
@@ -2069,7 +2167,6 @@
                 groupId: groupId,
                 settings: { isPaused: isPaused }
             });
-            // Atualização otimista da UI
             const card = document.getElementById(`group-${groupId}`);
             if (card) card.style.opacity = '0.7';
         }
@@ -2239,11 +2336,9 @@
             document.getElementById('edit-prompt').value=bot.prompt;
             document.getElementById('edit-botTypeGroup').checked = bot.botType === 'group';
             
-            // Preencher novos campos
             document.getElementById('edit-botName').value = bot.botName || '';
             document.getElementById('edit-silenceTime').value = bot.silenceTime || 0;
 
-            // Lógica de exibição para modo grupo
             if (bot.botType === 'group') {
                 document.getElementById('edit-global-settings').classList.add('hidden');
                 document.getElementById('edit-group-mode-msg').classList.remove('hidden');
@@ -2322,7 +2417,7 @@
             e.preventDefault(); 
             const nInput = document.getElementById('sessionName');
             const pInput = document.getElementById('prompt');
-            const isGroupBot = document.getElementById('botTypeGroup').checked;
+            const botType = document.getElementById('selectedBotType').value; 
             const platformInput = document.getElementById('botPlatform');
             const tokenInput = document.getElementById('telegramToken');
 
@@ -2338,26 +2433,25 @@
             const btn = document.getElementById('create-bot-btn');
             btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
             
-            // Log para debug
             console.log("Enviando criação de bot:", {
                 sessionName: n,
                 platform: platformInput.value,
-                token: tokenInput.value
+                token: tokenInput.value,
+                botType: botType
             });
 
             socket.emit('create-bot', { 
                 sessionName:n, 
-                prompt:pInput.value.trim(), 
+                prompt: botType === 'group' ? '' : pInput.value.trim(), 
                 owner:o,
-                botType: isGroupBot ? 'group' : 'individual',
-                botName: '', // Removido do form, envia vazio
-                silenceTime: 0, // Removido do form, envia 0
+                botType: botType,
+                botName: '', 
+                silenceTime: 0, 
                 platform: platformInput.value,
                 token: tokenInput.value.trim()
             });
             
-            // Limpar campos
-            nInput.value=''; pInput.value=''; document.getElementById('botTypeGroup').checked = false;
+            nInput.value=''; pInput.value=''; 
             tokenInput.value = '';
         };
         
@@ -2565,3 +2659,4 @@
     </script>
 </body>
 </html>
+
