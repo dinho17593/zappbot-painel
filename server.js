@@ -36,8 +36,7 @@ const upload = multer({ dest: 'uploads/' });
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : null;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.trim() : null;
-// ATENCAO: O script de instalacao deve substituir a URL abaixo pelo seu dominio
-const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || "https://zappbot.shop/auth/google/callback";
+const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || "/auth/google/callback";
 const SESSION_SECRET = process.env.SESSION_SECRET || 'sua-chave-secreta-muito-forte-e-diferente';
 
 const activationTokens = {};
@@ -242,6 +241,7 @@ app.post('/api/admin/restore', upload.single('backupFile'), (req, res) => {
         
         Object.keys(activeBots).forEach(sessionName => {
             if (activeBots[sessionName]) {
+                activeBots[sessionName].intentionalStop = true; 
                 activeBots[sessionName].process.kill('SIGINT');
                 delete activeBots[sessionName];
             }
@@ -275,7 +275,6 @@ app.post('/api/generate-activation-link', (req, res) => {
         }
     });
     
-    // O dominio sera substituido pelo script de instalacao, mas caso contrario, use window.location no front
     const activationLink = `https://${req.get('host')}/ativar?token=${token}`;
     res.json({ activationLink });
 });
@@ -331,7 +330,6 @@ app.post('/api/create-payment', async (req, res) => {
                     last_name: "Pagador"
                 },
                 external_reference: extRef,
-                // O dominio eh pego do header da requisicao para o callback funcionar
                 notification_url: `https://${req.get('host')}/webhook/mercadopago`
             }
         };
@@ -429,6 +427,7 @@ app.post('/webhook/mercadopago', async (req, res) => {
                         const botSessionName = group.managedByBot;
                         if (activeBots[botSessionName]) {
                             console.log(`[PAGAMENTO GRUPO] Reiniciando bot agregador: ${botSessionName}`);
+                            activeBots[botSessionName].intentionalStop = true;
                             activeBots[botSessionName].process.kill('SIGINT');
                             setTimeout(() => {
                                 const bots = readDB(BOTS_DB_PATH);
@@ -574,10 +573,8 @@ io.on('connection', (socket) => {
             writeDB(GROUPS_DB_PATH, groups);
             console.log(`[CONFIG] Grupo ${data.groupId} atualizado:`, data.settings);
             
-            // Notificar o frontend do dono
             io.to(groups[data.groupId].owner.toLowerCase()).emit('group-list-updated', Object.values(groups).filter(g => g.owner === groups[data.groupId].owner));
             
-            // Notificar o processo do bot em tempo real
             const botSessionName = groups[data.groupId].managedByBot;
             io.emit('group-settings-changed', {
                 botSessionName: botSessionName,
@@ -640,6 +637,7 @@ io.on('connection', (socket) => {
                     const botSessionName = group.managedByBot;
                     if (activeBots[botSessionName]) {
                         console.log(`[ADMIN GROUP DAYS] Reiniciando bot ${botSessionName} para aplicar novos dias.`);
+                        activeBots[botSessionName].intentionalStop = true;
                         activeBots[botSessionName].process.kill('SIGINT');
                         delete activeBots[botSessionName];
                         setTimeout(() => {
@@ -682,12 +680,20 @@ io.on('connection', (socket) => {
                 return socket.emit('feedback', { success: false, message: 'Permissão negada.' });
             }
             const botSessionName = group.managedByBot;
+            
+            // 1. Remove from DB first
             delete groups[groupId];
             writeDB(GROUPS_DB_PATH, groups);
+            
+            // 2. IMPORTANT: Tell connected bots to clear this group from memory IMMEDIATELY
+            io.emit('group-removed', { botSessionName, groupId });
+
             socket.emit('group-list-updated', Object.values(groups).filter(g => g.owner === user.username));
             socket.emit('feedback', { success: true, message: 'Grupo removido com sucesso.' });
+            
             if (activeBots[botSessionName]) {
                 console.log(`[DELETE GROUP] Reiniciando bot ${botSessionName} para aplicar remoção do grupo.`);
+                activeBots[botSessionName].intentionalStop = true;
                 activeBots[botSessionName].process.kill('SIGINT');
                 delete activeBots[botSessionName];
                 setTimeout(() => {
@@ -794,6 +800,7 @@ io.on('connection', (socket) => {
         socket.on('stop-bot', ({ sessionName }) => {
             if (activeBots[sessionName]) { 
                 try {
+                    activeBots[sessionName].intentionalStop = true; 
                     activeBots[sessionName].process.kill('SIGINT'); 
                 } catch(e) {
                     console.error("Erro ao matar processo:", e);
@@ -824,6 +831,7 @@ io.on('connection', (socket) => {
                  socket.emit('feedback', { success: true, message: 'Bot Agregador excluído.' });
             }
             if (activeBots[sessionName]) {
+                activeBots[sessionName].intentionalStop = true;
                 activeBots[sessionName].process.kill('SIGINT');
                 delete activeBots[sessionName];
             }
@@ -849,7 +857,10 @@ io.on('connection', (socket) => {
                 writeDB(BOTS_DB_PATH, bots);
                 io.emit('bot-updated', bot);
                 if (activeBots[d.sessionName]) {
-                    try { activeBots[d.sessionName].process.kill('SIGINT'); } catch (e) { console.error(`Erro ao parar ${d.sessionName} para update:`, e); }
+                    try { 
+                        activeBots[d.sessionName].intentionalStop = true;
+                        activeBots[d.sessionName].process.kill('SIGINT'); 
+                    } catch (e) { console.error(`Erro ao parar ${d.sessionName} para update:`, e); }
                     delete activeBots[d.sessionName];
                     socket.emit('feedback', { success: true, message: 'Configurações salvas. Reiniciando o robô...' });
                     setTimeout(() => { startBotProcess(bot); }, 1000);
@@ -868,6 +879,7 @@ io.on('connection', (socket) => {
             io.emit('bot-updated', bot);
             socket.emit('feedback', { success: true, message: 'Lista de ignorados salva. Reiniciando o bot...' });
             if (activeBots[sessionName]) {
+                activeBots[sessionName].intentionalStop = true;
                 activeBots[sessionName].process.kill('SIGINT');
                 setTimeout(() => startBotProcess(bot), 1000);
             }
@@ -945,17 +957,10 @@ function startBotProcess(bot, phoneNumber = null) {
     if (activeBots[bot.sessionName]) return; 
 
     const env = { ...process.env, API_KEYS_GEMINI: process.env.API_KEYS_GEMINI };
-    const ignoredIdentifiersArg = JSON.stringify(bot.ignoredIdentifiers || []);
     
+    const promptBase64 = Buffer.from(bot.prompt || '').toString('base64');
+    const ignoredBase64 = Buffer.from(JSON.stringify(bot.ignoredIdentifiers || [])).toString('base64');
     const phoneArg = phoneNumber ? phoneNumber : 'null';
-
-    const args = [
-        BOT_SCRIPT_PATH,
-        bot.sessionName,
-        bot.prompt,
-        ignoredIdentifiersArg,
-        phoneArg,
-    ];
 
     let authorizedGroupsArg = '[]';
     if (bot.botType === 'group') {
@@ -973,19 +978,25 @@ function startBotProcess(bot, phoneNumber = null) {
             }));
         authorizedGroupsArg = JSON.stringify(authorizedGroups);
     }
+    const groupsBase64 = Buffer.from(authorizedGroupsArg).toString('base64');
     
-    args.push(authorizedGroupsArg);
-    args.push(bot.botType || 'individual');
-    
-    args.push(bot.botName || '');
-    args.push(bot.silenceTime || '0');
-    
-    args.push(bot.platform || 'whatsapp');
-    args.push(bot.token || '');
+    const args = [
+        BOT_SCRIPT_PATH,
+        bot.sessionName,
+        promptBase64, 
+        ignoredBase64, 
+        phoneArg,
+        groupsBase64, 
+        bot.botType || 'individual',
+        bot.botName || '',
+        (bot.silenceTime || '0').toString(),
+        bot.platform || 'whatsapp',
+        bot.token || ''
+    ];
 
     const p = spawn('node', args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
-    activeBots[bot.sessionName] = { process: p };
+    activeBots[bot.sessionName] = { process: p, intentionalStop: false };
     updateBotStatus(bot.sessionName, 'Iniciando...');
 
     p.stdout.on('data', (d) => {
@@ -1004,8 +1015,12 @@ function startBotProcess(bot, phoneNumber = null) {
     
     p.on('close', (code) => {
         console.log(`[PROCESS] ${bot.sessionName} fechou com código ${code}`);
+        
+        if (activeBots[bot.sessionName]?.intentionalStop) {
+            updateBotStatus(bot.sessionName, 'Offline');
+        }
+        
         delete activeBots[bot.sessionName];
-        updateBotStatus(bot.sessionName, 'Offline');
     });
 }
 
@@ -1058,6 +1073,21 @@ function restartActiveBots() {
     });
     writeDB(BOTS_DB_PATH, bots);
 }
+
+const gracefulShutdown = () => {
+    console.log('[SISTEMA] Encerrando servidor, matando processos filhos...');
+    Object.keys(activeBots).forEach(sessionName => {
+        if (activeBots[sessionName]) {
+            try {
+                activeBots[sessionName].process.kill('SIGINT');
+            } catch (e) { }
+        }
+    });
+    process.exit(0);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
