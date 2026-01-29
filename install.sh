@@ -43,21 +43,25 @@ echo ""
 echo -e "${YELLOW}--- ARQUIVO .ENV COMPLETO ---${NC}"
 echo -e "${BLUE}Cole abaixo o conteúdo INTEIRO do seu arquivo .env:${NC}"
 echo "(Inclua todas as chaves do Google, Gemini, etc)"
-echo -e "${RED}>>> Quando terminar de colar, aperte ENTER, digite FIM e aperte ENTER novamente.${NC}"
+echo -e "${GREEN}>>> Apenas cole e aguarde 1 segundo. O sistema detectará o fim automaticamente.${NC}"
 echo "---------------------------------------------------"
 
-# Lógica para ler multiplas linhas até encontrar a palavra FIM
-rm -f .env # Garante que está vazio
+# Limpa arquivo anterior
+rm -f .env
 touch .env
 
-while IFS= read -r line; do
-    if [[ "$line" == "FIM" ]]; then
-        break
-    fi
+# Lógica de leitura inteligente (Timeout)
+# 1. Lê a primeira linha (espera o usuário colar)
+IFS= read -r first_line
+echo "$first_line" >> .env
+
+# 2. Lê o restante do buffer da colagem rapidamente
+# O timeout de 0.1s detecta quando a colagem acabou
+while IFS= read -r -t 0.1 line; do
     echo "$line" >> .env
 done
 
-echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
+echo -e "${GREEN}Arquivo .env recebido e salvo!${NC}"
 
 # Cria slug para o package.json
 APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+\|-+$//g' | tr A-Z a-z)
