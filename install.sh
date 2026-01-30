@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT DE CONFIGURAÇÃO (PASTE FULL .ENV) ---
+# --- SCRIPT DE CONFIGURAÇÃO (CORRIGIDO LOGO + ENV) ---
 
 TARGET_DIR="/var/www/bot-whatsapp"
 
@@ -35,7 +35,7 @@ read -p "3. Seu E-mail (para o certificado SSL): " EMAIL_SSL
 
 echo ""
 echo -e "${YELLOW}--- PERSONALIZAÇÃO VISUAL (LOGO) ---${NC}"
-echo "Cole o LINK da sua logo (Dropbox/Imgur/Direto)."
+echo "Cole o LINK da sua logo (Dropbox/Imgur/ImgBB/Direto)."
 echo "Deixe em branco para usar a padrão."
 read -p "URL da Logo: " LOGO_URL
 
@@ -43,21 +43,18 @@ echo ""
 echo -e "${YELLOW}--- ARQUIVO .ENV COMPLETO ---${NC}"
 echo -e "${BLUE}Cole abaixo o conteúdo INTEIRO do seu arquivo .env:${NC}"
 echo "(Inclua todas as chaves do Google, Gemini, etc)"
-echo -e "${GREEN}>>> Apenas cole e aguarde 1 segundo. O sistema detectará o fim automaticamente.${NC}"
+echo -e "${GREEN}>>> COLE AGORA. O sistema aguardará 1 segundo de silêncio para salvar.${NC}"
 echo "---------------------------------------------------"
 
 # Limpa arquivo anterior
 rm -f .env
 touch .env
 
-# Lógica de leitura inteligente (Timeout)
-# 1. Lê a primeira linha (espera o usuário colar)
-IFS= read -r first_line
-echo "$first_line" >> .env
-
-# 2. Lê o restante do buffer da colagem rapidamente
-# O timeout de 0.1s detecta quando a colagem acabou
-while IFS= read -r -t 0.1 line; do
+# Lógica de leitura (Timeout de 1s para garantir colagem completa)
+while IFS= read -r -t 1 line || [ -n "$line" ]; do
+    if [ -z "$line" ] && [ $? -ne 0 ]; then
+        break
+    fi
     echo "$line" >> .env
 done
 
@@ -72,7 +69,6 @@ APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+
 echo -e "${YELLOW}Instalando dependências do Linux...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get update -qq
-# Instala ffmpeg para processar a imagem da logo e certbot
 sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot python3-certbot-nginx -qq
 
 # ===================================================
@@ -94,26 +90,34 @@ npm install \
 # ===================================================
 echo -e "${YELLOW}Aplicando personalização visual...${NC}"
 
-# A. Substituição de textos (Nome e Domínio)
+# A. Substituição de textos
 grep -rl "ZappBot" index.html manifest.json | xargs sed -i "s/ZappBot/$APP_NAME/g" 2>/dev/null
 grep -rl "zappbot.shop" index.html | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
 
-# B. Download e Conversão da Logo (Se fornecida)
+# B. Download e Conversão da Logo (CORRIGIDO)
 if [ ! -z "$LOGO_URL" ]; then
-    echo "Processando logo..."
+    echo "Baixando logo..."
     LOGO_URL=$(echo "$LOGO_URL" | sed 's/dl=0/dl=1/g') # Fix Dropbox
     
-    wget -q "$LOGO_URL" -O logo_temp
+    # Usa CURL com User-Agent para evitar erro 403/Bloqueio em sites como ImgBB
+    curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "$LOGO_URL" -o logo_temp
     
     if [ -s logo_temp ]; then
-        # Redimensiona usando FFmpeg
-        ffmpeg -y -i logo_temp -vf scale=192:192 icon-192.png -loglevel error
-        ffmpeg -y -i logo_temp -vf scale=512:512 icon-512.png -loglevel error
-        cp icon-192.png favicon.ico
-        rm logo_temp
-        echo "✅ Logos atualizadas!"
+        echo "Processando imagem..."
+        # Tenta converter. Se falhar (exit code != 0), avisa o erro.
+        if ffmpeg -y -i logo_temp -vf scale=192:192 icon-192.png -loglevel error && \
+           ffmpeg -y -i logo_temp -vf scale=512:512 icon-512.png -loglevel error; then
+            
+            cp icon-192.png favicon.ico
+            rm logo_temp
+            echo -e "${GREEN}✅ Logos atualizadas com sucesso!${NC}"
+        else
+            echo -e "${RED}❌ Erro ao processar a imagem.${NC}"
+            echo "O link pode não ser uma imagem direta ou está protegido."
+            rm logo_temp
+        fi
     else
-        echo -e "${RED}Falha ao baixar logo.${NC}"
+        echo -e "${RED}❌ Falha no download da logo (Arquivo vazio).${NC}"
     fi
 fi
 
@@ -150,7 +154,6 @@ pm2 startup
 echo -e "${YELLOW}Configurando Proxy Nginx...${NC}"
 NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
 
-# Configuração SEM WWW para evitar erro de DNS em subdomínios
 cat > $NGINX_CONF <<EOF
 server {
     server_name ${DOMAIN};
@@ -187,7 +190,6 @@ if [ ! -z "$EMAIL_SSL" ]; then
     sudo ufw allow 443/tcp
     sudo ufw allow 3000/tcp
     
-    # Gera SSL APENAS para o domínio principal (sem www)
     sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
 else
     echo -e "${RED}E-mail não informado. SSL ignorado.${NC}"
