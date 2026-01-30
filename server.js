@@ -95,6 +95,7 @@ function ensureFirstUserIsAdmin() {
 ensureFirstUserIsAdmin();
 
 const defaultSettings = {
+    appName: "zappbot",
     mpAccessToken: "", 
     supportNumber: "5524999842338",
     priceMonthly: "29.90", 
@@ -207,7 +208,37 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     });
 }
 
-// --- ROTA DE UPLOAD DE ÍCONES (ADICIONADA) ---
+// --- ROTA DINÂMICA DO MANIFEST.JSON ---
+app.get('/manifest.json', (req, res) => {
+    const settings = readDB(SETTINGS_DB_PATH);
+    const appName = settings.appName || 'zappbot';
+    
+    res.json({
+        "name": appName,
+        "short_name": appName,
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#09090b",
+        "theme_color": "#121214",
+        "orientation": "portrait",
+        "icons": [
+            {
+                "src": "/icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable"
+            },
+            {
+                "src": "/icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ]
+    });
+});
+
+// --- ROTA DE UPLOAD DE ÍCONES ---
 app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name: 'iconLarge' }]), (req, res) => {
     if (!req.session.user || !req.session.user.isAdmin) {
         return res.status(403).json({ success: false, message: 'Acesso negado.' });
@@ -217,14 +248,20 @@ app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name
         // Processar ícone pequeno (192x192)
         if (req.files['iconSmall']) {
             const tempPath = req.files['iconSmall'][0].path;
-            const targetPath = path.join(BASE_DIR, 'icon-192×192.png');
+            const targetPath = path.join(BASE_DIR, 'icon-192x192.png');
+            // Remove arquivo antigo se existir (com nome errado ou certo)
+            if(fs.existsSync(path.join(BASE_DIR, 'icon-192×192.png'))) fs.unlinkSync(path.join(BASE_DIR, 'icon-192×192.png'));
+            if(fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
             fs.renameSync(tempPath, targetPath);
         }
 
         // Processar ícone grande (512x512)
         if (req.files['iconLarge']) {
             const tempPath = req.files['iconLarge'][0].path;
-            const targetPath = path.join(BASE_DIR, 'icon-512×512.png');
+            const targetPath = path.join(BASE_DIR, 'icon-512x512.png');
+            // Remove arquivo antigo se existir
+            if(fs.existsSync(path.join(BASE_DIR, 'icon-512×512.png'))) fs.unlinkSync(path.join(BASE_DIR, 'icon-512×512.png'));
+            if(fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
             fs.renameSync(tempPath, targetPath);
         }
 
@@ -621,6 +658,7 @@ io.on('connection', (socket) => {
         socket.on('get-public-prices', () => {
             const s = readDB(SETTINGS_DB_PATH);
             socket.emit('public-prices', { 
+                appName: s.appName || 'zappbot',
                 supportNumber: s.supportNumber,
                 priceMonthly: s.priceMonthly, 
                 priceQuarterly: s.priceQuarterly, 
@@ -639,6 +677,7 @@ io.on('connection', (socket) => {
                 writeDB(SETTINGS_DB_PATH, ns); 
                 socket.emit('feedback', { success: true, message: 'Salvo' }); 
                 io.emit('public-prices', { 
+                    appName: ns.appName,
                     supportNumber: ns.supportNumber,
                     priceMonthly: ns.priceMonthly, 
                     priceQuarterly: ns.priceQuarterly, 
@@ -1147,4 +1186,3 @@ server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
     restartActiveBots();
 });
-
