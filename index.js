@@ -15,8 +15,11 @@ const fs = require('fs');
 const io = require('socket.io-client');
 const axios = require('axios');
 
-const nomeSessao = process.argv[2];
+// =================================================================================
+// CONFIGURAÇÃO E ARGUMENTOS
+// =================================================================================
 
+const nomeSessao = process.argv[2];
 const promptSistemaGlobal = Buffer.from(process.argv[3] || '', 'base64').toString('utf-8');
 const ignoredIdentifiersArg = Buffer.from(process.argv[4] || 'W10=', 'base64').toString('utf-8'); 
 let phoneNumberArg = (process.argv[5] && process.argv[5] !== 'null') ? process.argv[5] : null;
@@ -27,12 +30,17 @@ const botNameGlobal = process.argv[8] || '';
 const silenceTimeMinutesGlobal = parseInt(process.argv[9] || '0'); 
 const platform = process.argv[10] || 'whatsapp';
 const telegramToken = process.argv[11] || '';
+const notificationNumber = process.argv[12] || '';
 
 if (phoneNumberArg) {
     phoneNumberArg = phoneNumberArg.replace(/[^0-9]/g, '');
 }
 
 const modeloGemini = 'gemini-flash-latest'; 
+
+// =================================================================================
+// CONEXÃO SOCKET.IO
+// =================================================================================
 
 const socket = io('http://localhost:3000');
 
@@ -62,6 +70,10 @@ socket.on('group-removed', (data) => {
     }
 });
 
+// =================================================================================
+// VARIÁVEIS DE ESTADO
+// =================================================================================
+
 const pausados = {};
 const lastResponseTimes = {};
 
@@ -84,6 +96,10 @@ try {
 } catch (e) {
     console.error('❌ Erro ao ler grupos:', e);
 }
+
+// =================================================================================
+// CONFIGURAÇÃO GEMINI (IA)
+// =================================================================================
 
 const API_KEYS_STRING = process.env.API_KEYS_GEMINI;
 if (!API_KEYS_STRING) {
@@ -186,41 +202,385 @@ async function processarComGemini(jid, input, isAudio = false, promptEspecifico 
     return "";
 }
 
+// =================================================================================
+// FUNÇÕES AUXILIARES (ADMINISTRAÇÃO)
+// =================================================================================
+
 function areJidsSameUser(jid1, jid2) {
     if (!jid1 || !jid2) return false;
-    const n1 = jidNormalizedUser(jid1);
-    const n2 = jidNormalizedUser(jid2);
-    if (n1 === n2) return true;
-    const num1 = n1.split('@')[0].replace(/\D/g, '');
-    const num2 = n2.split('@')[0].replace(/\D/g, '');
-    if (num1 === num2) return true;
-    if (num1.startsWith('55') && num2.startsWith('55')) {
-        const body1 = num1.slice(2);
-        const body2 = num2.slice(2);
-        if (body1.slice(0, 2) === body2.slice(0, 2) && body1.slice(-8) === body2.slice(-8)) return true;
-    }
-    return false;
+    return jidNormalizedUser(jid1) === jidNormalizedUser(jid2);
 }
 
+async function isGroupAdminWA(sock, jid, participant) {
+    try {
+        const metadata = await sock.groupMetadata(jid);
+        const admin = metadata.participants.find(p => {
+            return areJidsSameUser(p.id, participant) && (p.admin === 'admin' || p.admin === 'superadmin');
+        });
+        return !!admin;
+    } catch (e) { 
+        return false; 
+    }
+}
+
+async function isBotAdminWA(sock, jid) {
+    try {
+        const me = sock.user || sock.authState.creds.me;
+        if (!me) return false;
+
+        const myJid = jidNormalizedUser(me.id);
+        const myLid = me.lid ? jidNormalizedUser(me.lid) : null;
+        const metadata = await sock.groupMetadata(jid);
+        
+        const amIAdmin = metadata.participants.find(p => {
+            if (p.admin !== 'admin' && p.admin !== 'superadmin') return false;
+            const pJid = jidNormalizedUser(p.id);
+            if (myLid && pJid === myLid) return true;
+            if (pJid === myJid) return true;
+            return false;
+        });
+
+        return !!amIAdmin;
+    } catch (e) { return false; }
+}
+
+// =================================================================================
+// LÓGICA TELEGRAM
+// =================================================================================
 if (platform === 'telegram') {
     if (!telegramToken) { console.error('❌ Token do Telegram não fornecido.'); process.exit(1); }
     const bot = new Telegraf(telegramToken);
+    
     (async () => {
         try {
+            // Registrar comandos no Telegram
+            const commands = [
+                { command: 'id', description: 'Mostrar ID do Chat' },
+                { command: 'menu', description: 'Mostrar todos os comandos' },
+                { command: 'ping', description: 'Verificar status' }
+            ];
+
+            if (botType === 'group') {
+                commands.push(
+                    { command: 'ban', description: 'Banir usuário' },
+                    { command: 'kick', description: 'Expulsar usuário' },
+                    { command: 'mute', description: 'Mutar usuário' },
+                    { command: 'unmute', description: 'Desmutar usuário' },
+                    { command: 'promover', description: 'Promover a Admin' },
+                    { command: 'rebaixar', description: 'Remover Admin' },
+                    { command: 'antilink', description: 'Configurar Anti-Link' },
+                    { command: 'todos', description: 'Chamar todos' },
+                    { command: 'apagar', description: 'Apagar mensagem respondida' },
+                    { command: 'fixar', description: 'Fixar mensagem' },
+                    { command: 'desfixar', description: 'Desfixar mensagem' },
+                    { command: 'titulo', description: 'Alterar título do grupo' },
+                    { command: 'descricao', description: 'Alterar descrição' },
+                    { command: 'link', description: 'Pegar link do grupo' },
+                    { command: 'reset', description: 'Reiniciar memória da IA' }
+                );
+            }
+
+            await bot.telegram.setMyCommands(commands);
+            console.log(`[${nomeSessao}] Comandos do Telegram registrados.`);
+
             await bot.launch({ dropPendingUpdates: true });
             console.log('\nONLINE!'); 
             socket.emit('bot-online', { sessionName: nomeSessao });
         } catch (err) { console.error('Erro Telegram:', err); process.exit(1); }
     })();
+
+    // Listener para confirmação de ativação de grupo (Telegram)
+    socket.off('group-activation-result');
+    socket.on('group-activation-result', async (data) => {
+        if (data.botSessionName === nomeSessao && data.groupId) {
+            const msg = data.success ? '✅ Grupo ativado com sucesso!' : `❌ Falha: ${data.message}`;
+            try {
+                await bot.telegram.sendMessage(data.groupId, msg);
+                if(data.success) {
+                    authorizedGroups[data.groupId] = { 
+                        expiresAt: new Date(data.expiresAt), 
+                        antiLink: false, 
+                        prompt: '', 
+                        silenceTime: 0, 
+                        botName: '', 
+                        isPaused: false 
+                    };
+                }
+            } catch (e) { console.error('Erro ao enviar msg Telegram:', e); }
+        }
+    });
     
-    bot.on('message', async (ctx) => {
-        const texto = ctx.message.text || '';
-        if(!texto) return;
-        const resposta = await processarComGemini(ctx.chat.id.toString(), texto);
-        if(resposta) ctx.reply(resposta);
+    bot.command('id', (ctx) => {
+        ctx.reply(`ID deste chat: \`${ctx.chat.id}\``, { parse_mode: 'Markdown' });
     });
 
+    bot.on('message', async (ctx) => {
+        const texto = ctx.message.text || ctx.message.caption || '';
+        if(!texto && !ctx.message.voice && !ctx.message.audio) return;
+
+        const chatId = ctx.chat.id.toString();
+        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+        const senderName = ctx.from.first_name || 'User';
+        const userId = ctx.from.id.toString();
+        const isAudio = !!(ctx.message.voice || ctx.message.audio);
+
+        // 1. Verificar Link de Ativação
+        if (isGroup && texto.includes('/ativar?token=')) {
+            const token = texto.match(/token=([a-zA-Z0-9-]+)/)?.[1];
+            if (token) {
+                console.log(`[${nomeSessao}] Link de ativação detectado no grupo Telegram ${chatId}`);
+                const groupTitle = ctx.chat.title || 'Grupo Telegram';
+                socket.emit('group-activation-request', { 
+                    groupId: chatId, 
+                    groupName: groupTitle, 
+                    activationToken: token, 
+                    botSessionName: nomeSessao 
+                });
+                return; 
+            }
+        }
+
+        // 2. Lógica de Autorização de Grupo
+        let groupConfig = null;
+        if (botType === 'group') {
+            if (!isGroup || !authorizedGroups[chatId]) return;
+            if (authorizedGroups[chatId].expiresAt && new Date() > authorizedGroups[chatId].expiresAt) return;
+            groupConfig = authorizedGroups[chatId];
+            if (groupConfig.isPaused) return;
+        } else if (isGroup) {
+            return;
+        }
+
+        // 3. Lógica de Administração (Anti-Link e Comandos)
+        if (isGroup && botType === 'group') {
+            // --- ANTI-LINK ---
+            if (groupConfig && groupConfig.antiLink) {
+                const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(t\.me\/[^\s]+)/gi;
+                if (linkRegex.test(texto)) {
+                    try {
+                        const member = await ctx.getChatMember(userId);
+                        const senderIsAdm = member.status === 'administrator' || member.status === 'creator';
+                        
+                        if (!senderIsAdm) {
+                            await ctx.deleteMessage();
+                            await ctx.kickChatMember(userId);
+                            await ctx.reply('🚫 *Anti-Link:* Links não são permitidos aqui.', { parse_mode: 'Markdown' });
+                            return;
+                        }
+                    } catch (e) { console.error('Erro antilink telegram:', e); }
+                }
+            }
+
+            // --- COMANDOS ADMIN ---
+            if (texto.startsWith('!') || texto.startsWith('/') || texto.startsWith('.')) {
+                const args = texto.trim().split(/ +/);
+                let rawCmd = args.shift().toLowerCase();
+                
+                if (rawCmd.startsWith('/') || rawCmd.startsWith('!') || rawCmd.startsWith('.')) {
+                    rawCmd = rawCmd.substring(1);
+                }
+                
+                const comando = rawCmd.split('@')[0];
+
+                try {
+                    const member = await ctx.getChatMember(userId);
+                    const senderIsAdm = member.status === 'administrator' || member.status === 'creator';
+
+                    // Comandos Públicos
+                    if (comando === 'ping') {
+                        const start = Date.now();
+                        const msg = await ctx.reply('🏓 Pong!');
+                        const end = Date.now();
+                        await ctx.telegram.editMessageText(chatId, msg.message_id, null, `🏓 Pong! Latência: ${end - start}ms`);
+                        return;
+                    }
+
+                    if (comando === 'menu' || comando === 'ajuda') {
+                        let menu = `🤖 *MENU DE COMANDOS*\n\n`;
+                        menu += `👤 *Públicos:*\n`;
+                        menu += `/menu - Mostrar este menu\n`;
+                        menu += `/ping - Ver latência\n`;
+                        menu += `/id - Ver ID do chat\n`;
+
+                        if (senderIsAdm) {
+                            menu += `\n👮 *Administração:*\n`;
+                            menu += `/ban (responda) - Banir usuário\n`;
+                            menu += `/kick (responda) - Expulsar usuário\n`;
+                            menu += `/mute (responda) - Mutar usuário\n`;
+                            menu += `/unmute (responda) - Desmutar usuário\n`;
+                            menu += `/promover (responda) - Dar ADM\n`;
+                            menu += `/rebaixar (responda) - Tirar ADM\n`;
+                            menu += `/apagar (responda) - Apagar mensagem\n`;
+                            menu += `/fixar (responda) - Fixar mensagem\n`;
+                            menu += `/desfixar - Desfixar mensagem\n`;
+                            menu += `/todos - Marcar todos\n`;
+                            menu += `/titulo <nome> - Mudar título\n`;
+                            menu += `/descricao <texto> - Mudar descrição\n`;
+                            menu += `/link - Link do grupo\n`;
+                            menu += `/antilink <on/off> - Configurar Anti-Link\n`;
+                            menu += `/reset - Reiniciar memória da IA\n`;
+                        }
+                        await ctx.reply(menu, { parse_mode: 'Markdown' });
+                        return;
+                    }
+
+                    // Comandos de Admin
+                    if (senderIsAdm) {
+                        const replyTo = ctx.message.reply_to_message;
+                        const targetUser = replyTo ? replyTo.from : null;
+
+                        switch (comando) {
+                            case 'ban':
+                            case 'banir':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja banir.');
+                                await ctx.kickChatMember(targetUser.id);
+                                await ctx.reply('✅ Usuário banido.');
+                                return;
+
+                            case 'kick':
+                            case 'expulsar':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja expulsar.');
+                                await ctx.unbanChatMember(targetUser.id); // Kick no telegram é ban + unban
+                                await ctx.reply('✅ Usuário expulso.');
+                                return;
+
+                            case 'mute':
+                            case 'mutar':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja mutar.');
+                                await ctx.restrictChatMember(targetUser.id, { can_send_messages: false });
+                                await ctx.reply('✅ Usuário mutado.');
+                                return;
+
+                            case 'unmute':
+                            case 'desmutar':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja desmutar.');
+                                await ctx.restrictChatMember(targetUser.id, { can_send_messages: true, can_send_media_messages: true, can_send_other_messages: true });
+                                await ctx.reply('✅ Usuário desmutado.');
+                                return;
+
+                            case 'promover':
+                            case 'admin':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja promover.');
+                                await ctx.promoteChatMember(targetUser.id, { can_change_info: true, can_delete_messages: true, can_invite_users: true, can_restrict_members: true, can_pin_messages: true });
+                                await ctx.reply('✅ Usuário promovido a ADM.');
+                                return;
+
+                            case 'rebaixar':
+                                if (!targetUser) return ctx.reply('❌ Responda a mensagem de quem deseja rebaixar.');
+                                await ctx.promoteChatMember(targetUser.id, { can_change_info: false, can_delete_messages: false, can_invite_users: false, can_restrict_members: false, can_pin_messages: false });
+                                await ctx.reply('✅ ADM removido.');
+                                return;
+                            
+                            case 'todos':
+                            case 'everyone':
+                                await ctx.reply('📢 *Atenção todos!*', { parse_mode: 'Markdown' });
+                                return;
+
+                            case 'apagar':
+                            case 'del':
+                                if (!replyTo) return ctx.reply('❌ Responda a mensagem que deseja apagar.');
+                                await ctx.deleteMessage(replyTo.message_id);
+                                await ctx.deleteMessage(); // Apaga o comando também
+                                return;
+
+                            case 'fixar':
+                            case 'pin':
+                                if (!replyTo) return ctx.reply('❌ Responda a mensagem que deseja fixar.');
+                                await ctx.pinChatMessage(replyTo.message_id);
+                                return;
+
+                            case 'desfixar':
+                            case 'unpin':
+                                await ctx.unpinChatMessage();
+                                await ctx.reply('✅ Mensagem desfixada.');
+                                return;
+
+                            case 'titulo':
+                                if (!args.length) return ctx.reply('❌ Digite o novo título.');
+                                await ctx.setChatTitle(args.join(' '));
+                                await ctx.reply('✅ Título alterado.');
+                                return;
+
+                            case 'descricao':
+                                if (!args.length) return ctx.reply('❌ Digite a nova descrição.');
+                                await ctx.setChatDescription(args.join(' '));
+                                await ctx.reply('✅ Descrição alterada.');
+                                return;
+
+                            case 'link':
+                                const invite = await ctx.exportChatInviteLink();
+                                await ctx.reply(`🔗 Link do grupo: ${invite}`);
+                                return;
+
+                            case 'reset':
+                                historicoConversa[chatId] = [];
+                                await ctx.reply('🧠 Memória da IA reiniciada para este grupo.');
+                                return;
+
+                            case 'antilink':
+                                if (!args[0]) return ctx.reply('Use: /antilink on ou /antilink off');
+                                const novoEstado = args[0].toLowerCase() === 'on';
+                                authorizedGroups[chatId].antiLink = novoEstado;
+                                socket.emit('update-group-settings', { groupId: chatId, settings: { antiLink: novoEstado } });
+                                await ctx.reply(`🛡️ Anti-Link agora está: *${novoEstado ? 'LIGADO' : 'DESLIGADO'}*`, { parse_mode: 'Markdown' });
+                                return;
+                        }
+                    }
+                } catch (e) { console.error('Erro comando telegram:', e); }
+            }
+        }
+
+        // 4. Verificação de Ignorados (Nome)
+        if (ignoredIdentifiers.some(i => i.type === 'name' && senderName.toLowerCase() === i.value.toLowerCase())) return;
+
+        // 5. Lógica de Silêncio e Chamada por Nome
+        let shouldRespond = true;
+        const botName = (groupConfig && groupConfig.botName) ? groupConfig.botName : botNameGlobal;
+        const isNameCalled = botName && texto.toLowerCase().includes(botName.toLowerCase());
+        const silenceTime = (groupConfig && groupConfig.silenceTime !== undefined) ? groupConfig.silenceTime : silenceTimeMinutesGlobal;
+
+        if (silenceTime > 0) {
+            const lastTime = lastResponseTimes[chatId] || 0;
+            const timeDiffMinutes = (Date.now() - lastTime) / (1000 * 60);
+            if (!isNameCalled && timeDiffMinutes < silenceTime) shouldRespond = false;
+        }
+
+        if (!shouldRespond) return;
+
+        // 6. Processamento IA
+        try {
+            ctx.sendChatAction('typing'); 
+            let audioBuffer = null;
+            if (isAudio) {
+                const fileId = ctx.message.voice ? ctx.message.voice.file_id : ctx.message.audio.file_id;
+                const fileLink = await ctx.telegram.getFileLink(fileId);
+                const response = await axios.get(fileLink.href, { responseType: 'arraybuffer' });
+                audioBuffer = Buffer.from(response.data).toString('base64');
+            }
+
+            const promptToUse = (groupConfig && groupConfig.prompt) ? groupConfig.prompt : promptSistemaGlobal;
+            const resposta = await processarComGemini(chatId, isAudio ? audioBuffer : texto, isAudio, promptToUse);
+            
+            if(resposta && resposta.trim().length > 0) {
+                await ctx.reply(resposta, { reply_to_message_id: ctx.message.message_id });
+                lastResponseTimes[chatId] = Date.now();
+            }
+        } catch (e) {
+            console.error("Erro ao responder no Telegram:", e);
+        }
+    });
+    
+    bot.catch((err, ctx) => {
+        console.log(`Erro Telegram para ${ctx.updateType}`, err);
+    });
+
+    process.once('SIGINT', () => { bot.stop('SIGINT'); process.exit(0); });
+    process.once('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
+
 } else {
+    // =================================================================================
+    // LÓGICA WHATSAPP
+    // =================================================================================
     async function ligarBot() {
         console.log(`🚀 Iniciando ${nomeSessao} (WhatsApp)...`);
         const authPath = `./auth_sessions/auth_${nomeSessao}`;
@@ -287,94 +647,13 @@ if (platform === 'telegram') {
                         msg.message.imageMessage?.caption || msg.message.videoMessage?.caption || '';
             let isAudio = !!msg.message.audioMessage;
 
+            // --- VERIFICAÇÃO DE ATIVAÇÃO ---
             if (isGroup && texto.includes('/ativar?token=')) {
                 const token = texto.match(/token=([a-zA-Z0-9-]+)/)?.[1];
                 if (token) {
+                    console.log(`[${nomeSessao}] Link de ativação detectado no grupo ${jid}`);
                     const meta = await sock.groupMetadata(jid);
                     socket.emit('group-activation-request', { groupId: jid, groupName: meta.subject, activationToken: token, botSessionName: nomeSessao });
-                    return; 
-                }
-            }
-
-            let groupConfig = null;
-            if (botType === 'group') {
-                // VERIFICAÇÃO CRÍTICA DE SEGURANÇA
-                // Se o bot é de grupo, mas o grupo não está na memória (removido), aborta.
-                if (!isGroup || !authorizedGroups[jid]) {
-                    // Ignora silenciosamente. O grupo foi removido ou não está autorizado.
-                    return;
-                }
-                
-                if (authorizedGroups[jid].expiresAt && new Date() > authorizedGroups[jid].expiresAt) return;
-                groupConfig = authorizedGroups[jid];
-                if (groupConfig.isPaused) return;
-            } else if (isGroup) {
-                return;
-            }
-
-            if (msg.key.fromMe) return; 
-            if (pausados[jid] && Date.now() < pausados[jid]) return;
-            if (ignoredIdentifiers.some(i => (i.type === 'number' && sender.includes(i.value)) || (i.type === 'name' && msg.pushName?.toLowerCase() === i.value.toLowerCase()))) return;
-
-            let shouldRespond = true;
-            const myId = sock.user?.id || sock.authState.creds.me?.id;
-            const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.some(m => areJidsSameUser(m, myId));
-            const isQuoted = msg.message.extendedTextMessage?.contextInfo?.participant && areJidsSameUser(msg.message.extendedTextMessage.contextInfo.participant, myId);
-            const botName = (groupConfig && groupConfig.botName) ? groupConfig.botName : botNameGlobal;
-            const isNameCalled = botName && texto.toLowerCase().includes(botName.toLowerCase());
-            const silenceTime = (groupConfig && groupConfig.silenceTime !== undefined) ? groupConfig.silenceTime : silenceTimeMinutesGlobal;
-
-            if (silenceTime > 0) {
-                const lastTime = lastResponseTimes[jid] || 0;
-                const timeDiffMinutes = (Date.now() - lastTime) / (1000 * 60);
-                if (!isMentioned && !isQuoted && !isNameCalled) {
-                    if (timeDiffMinutes < silenceTime) shouldRespond = false;
-                }
-            }
-
-            if (!shouldRespond) return;
-
-            try {
-                console.log(`[DEBUG] Mensagem recebida de ${jid}. Enviando 'composing'...`);
-                await sock.readMessages([msg.key]);
-                await sock.sendPresenceUpdate('composing', jid);
-                
-                await delay(1000); 
-                
-                let audioBuffer = null;
-                if (isAudio) {
-                    console.log(`[DEBUG] Baixando áudio...`);
-                    audioBuffer = (await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage })).toString('base64');
-                }
-
-                const promptToUse = (groupConfig && groupConfig.prompt) ? groupConfig.prompt : promptSistemaGlobal;
-
-                console.log(`[DEBUG] Chamando Gemini...`);
-                const resposta = await processarComGemini(jid, isAudio ? audioBuffer : texto, isAudio, promptToUse);
-                
-                console.log(`[DEBUG] Resposta recebida da função: "${resposta ? resposta.substring(0, 10) + '...' : 'VAZIA'}"`);
-
-                if (resposta && resposta.trim().length > 0) {
-                    console.log(`[DEBUG] Enviando mensagem para o WhatsApp...`);
-                    await sock.sendMessage(jid, { text: resposta }, { quoted: msg });
-                    lastResponseTimes[jid] = Date.now();
-                    console.log(`[DEBUG] Mensagem enviada com sucesso.`);
-                } else {
-                    console.log(`[DEBUG] Resposta vazia, nada enviado.`);
-                }
-                
-                await sock.sendPresenceUpdate('paused', jid);
-
-            } catch (e) { 
-                console.error('[ERRO CRÍTICO NO LOOP]:', e); 
-                await sock.sendPresenceUpdate('paused', jid);
-            }
-        });
-    }
-
-    ligarBot().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
-}
-
                     return; 
                 }
             }
@@ -384,14 +663,16 @@ if (platform === 'telegram') {
                 if (!isGroup || !authorizedGroups[jid]) return;
                 if (authorizedGroups[jid].expiresAt && new Date() > authorizedGroups[jid].expiresAt) return;
                 groupConfig = authorizedGroups[jid];
-                if (groupConfig.isPaused) return; // Bot pausado neste grupo
+                if (groupConfig.isPaused) return;
             } else if (isGroup) {
                 return;
             }
 
+            // --- LÓGICA DE ADMINISTRAÇÃO (WHATSAPP) ---
             if (isGroup && botType === 'group') {
                 
-                if (authorizedGroups[jid].antiLink) {
+                // 1. Anti-Link
+                if (groupConfig && groupConfig.antiLink) {
                     const linkRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(wa\.me\/[^\s]+)/gi;
                     if (linkRegex.test(texto)) {
                         const botIsAdm = await isBotAdminWA(sock, jid);
@@ -406,38 +687,63 @@ if (platform === 'telegram') {
                     }
                 }
 
+                // 2. Comandos Admin
                 if (texto.startsWith('!') || texto.startsWith('/') || texto.startsWith('.')) {
                     const args = texto.slice(1).trim().split(/ +/);
                     const comando = args.shift().toLowerCase();
                     const senderIsAdm = await isGroupAdminWA(sock, jid, sender);
                     const botIsAdm = await isBotAdminWA(sock, jid);
 
+                    // Comandos Públicos
+                    if (comando === 'ping') {
+                        const start = Date.now();
+                        await sock.sendMessage(jid, { text: `🏓 Pong! Latência: ${start - (msg.messageTimestamp * 1000)}ms` }, { quoted: msg });
+                        return;
+                    }
+
+                    if (comando === 'menu' || comando === 'ajuda') {
+                        let menu = `🤖 *MENU DE COMANDOS*\n\n`;
+                        menu += `👤 *Públicos:*\n`;
+                        menu += `!menu - Mostrar este menu\n`;
+                        menu += `!ping - Ver latência\n`;
+
+                        if (senderIsAdm) {
+                            menu += `\n👮 *Administração:*\n`;
+                            menu += `!ban @user - Banir usuário\n`;
+                            menu += `!kick @user - Expulsar usuário\n`;
+                            menu += `!promover @user - Dar ADM\n`;
+                            menu += `!rebaixar @user - Tirar ADM\n`;
+                            menu += `!apagar (responda) - Apagar mensagem\n`;
+                            menu += `!fechar - Fechar grupo (só adms)\n`;
+                            menu += `!abrir - Abrir grupo (todos)\n`;
+                            menu += `!todos - Marcar todos\n`;
+                            menu += `!titulo <nome> - Mudar nome\n`;
+                            menu += `!descricao <texto> - Mudar desc\n`;
+                            menu += `!link - Link do grupo\n`;
+                            menu += `!antilink <on/off> - Configurar Anti-Link\n`;
+                            menu += `!reset - Reiniciar memória da IA\n`;
+                            menu += `!sair - Bot sai do grupo\n`;
+                        }
+                        await sock.sendMessage(jid, { text: menu }, { quoted: msg });
+                        return;
+                    }
+
                     if (senderIsAdm) {
                         let targetUser = null;
-
-                        // 1. Verifica se há menções reais (@Nome clicável)
                         const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
-                        if (mentions && mentions.length > 0) {
-                            targetUser = mentions[0];
-                        } 
-                        // 2. Verifica se é resposta a uma mensagem
-                        else if (msg.message.extendedTextMessage?.contextInfo?.participant) {
-                            targetUser = msg.message.extendedTextMessage.contextInfo.participant;
-                        }
-                        // 3. Tenta pegar do texto (apenas se for número direto)
+                        if (mentions && mentions.length > 0) targetUser = mentions[0];
+                        else if (msg.message.extendedTextMessage?.contextInfo?.participant) targetUser = msg.message.extendedTextMessage.contextInfo.participant;
                         else if (args[0]) {
                             const potentialNum = args[0].replace(/[^0-9]/g, '');
-                            if (potentialNum.length >= 10) { 
-                                targetUser = potentialNum + '@s.whatsapp.net';
-                            }
+                            if (potentialNum.length >= 10) targetUser = potentialNum + '@s.whatsapp.net';
                         }
 
                         switch (comando) {
                             case 'ban':
                             case 'banir':
                             case 'kick':
-                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM para banir.' }, { quoted: msg });
-                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém (@Nome) ou responda a mensagem.' }, { quoted: msg });
+                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
+                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém ou responda.' }, { quoted: msg });
                                 await sock.groupParticipantsUpdate(jid, [targetUser], 'remove');
                                 await sock.sendMessage(jid, { text: '✅ Usuário removido.' });
                                 return;
@@ -445,48 +751,86 @@ if (platform === 'telegram') {
                             case 'promover':
                             case 'admin':
                                 if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
-                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém (@Nome) ou responda a mensagem.' }, { quoted: msg });
+                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém ou responda.' }, { quoted: msg });
                                 await sock.groupParticipantsUpdate(jid, [targetUser], 'promote');
-                                await sock.sendMessage(jid, { text: '✅ Usuário promovido a ADM.' });
+                                await sock.sendMessage(jid, { text: '✅ Usuário promovido.' });
                                 return;
 
                             case 'rebaixar':
                                 if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
-                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém (@Nome) ou responda a mensagem.' }, { quoted: msg });
+                                if (!targetUser) return sock.sendMessage(jid, { text: '❌ Marque alguém ou responda.' }, { quoted: msg });
                                 await sock.groupParticipantsUpdate(jid, [targetUser], 'demote');
                                 await sock.sendMessage(jid, { text: '✅ ADM removido.' });
+                                return;
+
+                            case 'apagar':
+                            case 'del':
+                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
+                                if (!msg.message.extendedTextMessage?.contextInfo?.stanzaId) return sock.sendMessage(jid, { text: '❌ Responda a mensagem.' }, { quoted: msg });
+                                const key = {
+                                    remoteJid: jid,
+                                    fromMe: false,
+                                    id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+                                    participant: msg.message.extendedTextMessage.contextInfo.participant
+                                };
+                                await sock.sendMessage(jid, { delete: key });
                                 return;
 
                             case 'fechar':
                                 if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
                                 await sock.groupSettingUpdate(jid, 'announcement');
-                                await sock.sendMessage(jid, { text: '🔒 Grupo fechado para administradores.' });
+                                await sock.sendMessage(jid, { text: '🔒 Grupo fechado.' });
                                 return;
 
                             case 'abrir':
                                 if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
                                 await sock.groupSettingUpdate(jid, 'not_announcement');
-                                await sock.sendMessage(jid, { text: '🔓 Grupo aberto para todos.' });
+                                await sock.sendMessage(jid, { text: '🔓 Grupo aberto.' });
                                 return;
                             
                             case 'todos':
                             case 'everyone':
                                 if (!botIsAdm) return; 
                                 const groupMeta = await sock.groupMetadata(jid);
-                                const mentions = groupMeta.participants.map(p => p.id);
-                                await sock.sendMessage(jid, { text: '📢 *Atenção todos!*', mentions: mentions });
+                                const mentionsAll = groupMeta.participants.map(p => p.id);
+                                await sock.sendMessage(jid, { text: '📢 *Atenção todos!*', mentions: mentionsAll });
+                                return;
+
+                            case 'titulo':
+                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
+                                if (!args.length) return sock.sendMessage(jid, { text: '❌ Digite o novo nome.' }, { quoted: msg });
+                                await sock.groupUpdateSubject(jid, args.join(' '));
+                                await sock.sendMessage(jid, { text: '✅ Nome alterado.' });
+                                return;
+
+                            case 'descricao':
+                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
+                                if (!args.length) return sock.sendMessage(jid, { text: '❌ Digite a descrição.' }, { quoted: msg });
+                                await sock.groupUpdateDescription(jid, args.join(' '));
+                                await sock.sendMessage(jid, { text: '✅ Descrição alterada.' });
+                                return;
+
+                            case 'link':
+                                if (!botIsAdm) return sock.sendMessage(jid, { text: '❌ Preciso ser ADM.' }, { quoted: msg });
+                                const code = await sock.groupInviteCode(jid);
+                                await sock.sendMessage(jid, { text: `🔗 Link: https://chat.whatsapp.com/${code}` }, { quoted: msg });
+                                return;
+
+                            case 'reset':
+                                historicoConversa[jid] = [];
+                                await sock.sendMessage(jid, { text: '🧠 Memória da IA reiniciada.' }, { quoted: msg });
+                                return;
+
+                            case 'sair':
+                                await sock.sendMessage(jid, { text: '👋 Adeus!' });
+                                await sock.groupLeave(jid);
                                 return;
 
                             case 'antilink':
                                 if (!args[0]) return sock.sendMessage(jid, { text: 'Use: !antilink on ou !antilink off' });
                                 const novoEstado = args[0].toLowerCase() === 'on';
                                 authorizedGroups[jid].antiLink = novoEstado;
-                                
-                                socket.emit('update-group-settings', { 
-                                    groupId: jid, 
-                                    settings: { antiLink: novoEstado } 
-                                });
-
+                                socket.emit('update-group-settings', { groupId: jid, settings: { antiLink: novoEstado } });
                                 await sock.sendMessage(jid, { text: `🛡️ Anti-Link agora está: *${novoEstado ? 'LIGADO' : 'DESLIGADO'}*` });
                                 return;
                         }
@@ -500,52 +844,58 @@ if (platform === 'telegram') {
 
             let shouldRespond = true;
             const myId = sock.user?.id || sock.authState.creds.me?.id;
-            
-            // Verifica menção ou resposta
             const isMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.some(m => areJidsSameUser(m, myId));
             const isQuoted = msg.message.extendedTextMessage?.contextInfo?.participant && areJidsSameUser(msg.message.extendedTextMessage.contextInfo.participant, myId);
-            
-            // Determinar nome do bot (Grupo ou Global)
             const botName = (groupConfig && groupConfig.botName) ? groupConfig.botName : botNameGlobal;
             const isNameCalled = botName && texto.toLowerCase().includes(botName.toLowerCase());
-
-            // Determinar tempo de silêncio (Grupo ou Global)
             const silenceTime = (groupConfig && groupConfig.silenceTime !== undefined) ? groupConfig.silenceTime : silenceTimeMinutesGlobal;
 
             if (silenceTime > 0) {
                 const lastTime = lastResponseTimes[jid] || 0;
                 const timeDiffMinutes = (Date.now() - lastTime) / (1000 * 60);
-
-                if (!isMentioned && !isQuoted && !isNameCalled) {
-                    if (timeDiffMinutes < silenceTime) {
-                        shouldRespond = false;
-                    }
-                }
+                if (!isMentioned && !isQuoted && !isNameCalled && timeDiffMinutes < silenceTime) shouldRespond = false;
             }
 
             if (!shouldRespond) return;
 
             try {
+                console.log(`[DEBUG] Mensagem recebida de ${jid}. Enviando 'composing'...`);
                 await sock.readMessages([msg.key]);
                 await sock.sendPresenceUpdate('composing', jid);
-                await delay(2000);
+                await delay(1000); 
                 
                 let audioBuffer = null;
-                if (isAudio) audioBuffer = (await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage })).toString('base64');
-
-                // Usar prompt do grupo se existir, senão global
-                const promptToUse = (groupConfig && groupConfig.prompt) ? groupConfig.prompt : promptSistemaGlobal;
-
-                const resposta = await processarComGemini(jid, isAudio ? audioBuffer : texto, isAudio, promptToUse);
-                if (resposta) {
-                    await sock.sendMessage(jid, { text: resposta }, { quoted: msg });
-                    lastResponseTimes[jid] = Date.now();
+                if (isAudio) {
+                    console.log(`[DEBUG] Baixando áudio...`);
+                    audioBuffer = (await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage })).toString('base64');
                 }
 
-            } catch (e) { console.error('Erro msg:', e); }
+                const promptToUse = (groupConfig && groupConfig.prompt) ? groupConfig.prompt : promptSistemaGlobal;
+                const resposta = await processarComGemini(jid, isAudio ? audioBuffer : texto, isAudio, promptToUse);
+                
+                if (resposta && resposta.trim().length > 0) {
+                    await sock.sendMessage(jid, { text: resposta }, { quoted: msg });
+                    lastResponseTimes[jid] = Date.now();
+
+                    if (notificationNumber) {
+                        try {
+                            const adminJid = notificationNumber.replace(/\D/g, '') + '@s.whatsapp.net';
+                            const clientName = msg.pushName || sender.split('@')[0];
+                            const msgNotif = `🔔 O cliente ${clientName} mandou uma mensagem e eu respondi.`;
+                            await sock.sendMessage(adminJid, { text: msgNotif });
+                        } catch (errNotif) { console.error(`[ERRO NOTIFICAÇÃO]`, errNotif); }
+                    }
+                }
+                await sock.sendPresenceUpdate('paused', jid);
+            } catch (e) { 
+                console.error('[ERRO CRÍTICO NO LOOP]:', e); 
+                await sock.sendPresenceUpdate('paused', jid);
+            }
         });
     }
 
     ligarBot().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
 }
 
+process.on('uncaughtException', (err) => { console.error('Exceção não tratada:', err); });
+process.on('unhandledRejection', (reason, promise) => { console.error('Rejeição não tratada:', reason); });
