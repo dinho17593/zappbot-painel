@@ -1,16 +1,17 @@
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Painel ZappBot</title>
+    <title>Painel zappbot</title>
     
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="theme-color" content="#121214">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ZappBot">
+    <meta name="apple-mobile-web-app-title" content="zappbot">
     
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="icon" type="image/png" href="icon-192.png">
@@ -322,7 +323,7 @@
         <div class="auth-card">
             <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: var(--primary); margin: 0; font-size: 2rem;"><i class="fas fa-robot"></i></h1>
-                <h2 style="margin: 5px 0 0 0; font-size: 1.5rem;">ZappBot</h2>
+                <h2 style="margin: 5px 0 0 0; font-size: 1.5rem;">zappbot</h2>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">Automação Simplificada</p>
             </div>
             
@@ -366,7 +367,7 @@
                     <button id="admin-menu-btn" class="nav-btn hidden" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
                 </div>
                 
-                <div class="brand-center"><i class="fas fa-robot"></i> ZappBot</div>
+                <div class="brand-center"><i class="fas fa-robot"></i> zappbot</div>
                 <a href="#" class="nav-btn logout" title="Sair" onclick="confirmLogout()"><i class="fas fa-sign-out-alt"></i></a>
             </div>
             <div class="user-strip">
@@ -399,6 +400,27 @@
                 <div id="view-header-admin" style="margin: 15px 0;">
                     <h2 style="font-size: 1.2rem; margin: 0;">Administração</h2>
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Configurações globais e gerenciamento de usuários.</p>
+                </div>
+
+                <div class="form-section" style="border-color: var(--purple-dark);">
+                    <h4 style="color: #e9d5ff; margin-top: 0; margin-bottom: 15px;"><i class="fas fa-images"></i> Logos do Sistema</h4>
+                    <p class="help-text">Atualize os ícones do sistema. As imagens serão renomeadas automaticamente.</p>
+                    
+                    <form id="upload-icons-form" style="display: flex; flex-direction: column; gap: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <label class="input-label">Ícone Pequeno (192x192)</label>
+                                <input type="file" name="iconSmall" accept="image/png" required>
+                            </div>
+                            <div>
+                                <label class="input-label">Ícone Grande (512x512)</label>
+                                <input type="file" name="iconLarge" accept="image/png" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" style="background: var(--purple-dark); color: #fff;">
+                            <i class="fas fa-upload"></i> Atualizar Ícones
+                        </button>
+                    </form>
                 </div>
 
                 <div class="form-section" style="border-color: var(--yellow);">
@@ -970,12 +992,12 @@
 
                 socket.emit('get-my-bots');
                 socket.emit('get-my-groups');
+                socket.emit('get-public-prices'); // Solicita preços imediatamente
 
                 if (currentUser.isAdmin) {
                     socket.emit('admin-get-users');
                     socket.emit('admin-settings');
                 }
-                socket.emit('get-public-prices');
             });
 
             socket.on('update-limit', (newLimit) => {
@@ -1083,20 +1105,13 @@
             
             socket.on('admin-settings', (s) => { 
                 document.getElementById('mp-access-token').value = s.mpAccessToken || ''; 
-                document.getElementById('price-monthly').value = s.priceMonthly || '';
-                document.getElementById('price-quarterly').value = s.priceQuarterly || '';
-                document.getElementById('price-semiannual').value = s.priceSemiannual || '';
-                document.getElementById('price-yearly').value = s.priceYearly || '';
-                
-                document.getElementById('price-resell-5').value = s.priceResell5 || '';
-                document.getElementById('price-resell-10').value = s.priceResell10 || '';
-                document.getElementById('price-resell-20').value = s.priceResell20 || '';
-                document.getElementById('price-resell-30').value = s.priceResell30 || '';
+                // Os preços são atualizados pelo evento public-prices também
             });
 
             socket.on('public-prices', (prices) => { 
                 publicPrices = prices || {}; 
 
+                // Atualiza inputs do admin se existirem na tela
                 if(document.getElementById('price-monthly')) {
                     document.getElementById('price-monthly').value = prices.priceMonthly || '';
                     document.getElementById('price-quarterly').value = prices.priceQuarterly || '';
@@ -1670,7 +1685,7 @@
 
                         if (navigator.canShare && navigator.canShare({ files: [file] })) {
                             await navigator.share({
-                                title: 'ZappBot QR Code',
+                                title: 'zappbot QR Code',
                                 text: 'Escaneie este QR Code para conectar o bot ' + sessionName,
                                 files: [file]
                             });
@@ -1712,7 +1727,7 @@
 
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({
-                        title: 'Pagamento Pix ZappBot',
+                        title: 'Pagamento Pix zappbot',
                         text: 'Aqui está o código Pix Copia e Cola:\n\n' + textCode,
                         files: [file]
                     });
@@ -1926,6 +1941,41 @@
             showFeedback(true, 'Configurações salvas!');
         };
 
+        // SCRIPT PARA UPLOAD DE ÍCONES
+        document.getElementById('upload-icons-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const btn = form.querySelector('button');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/api/admin/upload-icons', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showFeedback(true, result.message);
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    showFeedback(false, result.message || 'Erro ao enviar ícones.');
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            } catch (error) {
+                console.error(error);
+                showFeedback(false, 'Erro de conexão.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
         let currentPaySession = '';
         let currentPayGroup = '';
         function openPay(sessionName = null, groupId = null, groupName = null) {
@@ -1946,10 +1996,10 @@
             const container = document.getElementById('plans-container');
             container.innerHTML = '';
             const plans = [
-                { id: 'monthly', title: 'Mensal', price: publicPrices.monthly, desc: '30 dias' },
-                { id: 'quarterly', title: 'Trimestral', price: publicPrices.quarterly, desc: '90 dias' },
-                { id: 'semiannual', title: 'Semestral', price: publicPrices.semiannual, desc: '180 dias' },
-                { id: 'yearly', title: 'Anual', price: publicPrices.yearly, desc: '365 dias' }
+                { id: 'monthly', title: 'Mensal', price: publicPrices.priceMonthly, desc: '30 dias' },
+                { id: 'quarterly', title: 'Trimestral', price: publicPrices.priceQuarterly, desc: '90 dias' },
+                { id: 'semiannual', title: 'Semestral', price: publicPrices.priceSemiannual, desc: '180 dias' },
+                { id: 'yearly', title: 'Anual', price: publicPrices.priceYearly, desc: '365 dias' }
             ];
             plans.forEach(p => {
                 const el = document.createElement('div'); el.className = 'plan-option';
@@ -1995,10 +2045,10 @@
             const container = document.getElementById('resell-plans-container');
             container.innerHTML = '';
             const resellPlans = [
-                { id: 'resell_5', title: 'Pacote 5 Robôs', price: publicPrices.resell5, limit: 5 },
-                { id: 'resell_10', title: 'Pacote 10 Robôs', price: publicPrices.resell10, limit: 10 },
-                { id: 'resell_20', title: 'Pacote 20 Robôs', price: publicPrices.resell20, limit: 20 },
-                { id: 'resell_30', title: 'Pacote 30 Robôs', price: publicPrices.resell30, limit: 30 },
+                { id: 'resell_5', title: 'Pacote 5 Robôs', price: publicPrices.priceResell5, limit: 5 },
+                { id: 'resell_10', title: 'Pacote 10 Robôs', price: publicPrices.priceResell10, limit: 10 },
+                { id: 'resell_20', title: 'Pacote 20 Robôs', price: publicPrices.priceResell20, limit: 20 },
+                { id: 'resell_30', title: 'Pacote 30 Robôs', price: publicPrices.priceResell30, limit: 30 },
             ];
             resellPlans.forEach(p => {
                 const el = document.createElement('div'); el.className = 'plan-option';
