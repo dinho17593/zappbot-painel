@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT DE CONFIGURAÇÃO (VERSÃO FINAL - NANO + CURL FIX) ---
+# --- SCRIPT DE CONFIGURAÇÃO E ATUALIZAÇÃO ---
 
 TARGET_DIR="/var/www/bot-whatsapp"
 
@@ -13,7 +13,7 @@ NC='\033[0m'
 
 echo -e "${GREEN}--- CONFIGURANDO SERVIDOR ---${NC}"
 
-# Garante que o nano e curl estejam instalados antes de tudo
+# Garante que pacotes essenciais estejam instalados
 sudo apt-get update -qq
 sudo apt-get install -y nano curl -qq
 
@@ -26,42 +26,41 @@ echo -e "${BLUE}---------------------------------------------------${NC}"
 echo -e "${BLUE}           DADOS DO SERVIDOR E SSL               ${NC}"
 echo -e "${BLUE}---------------------------------------------------${NC}"
 
-read -p "1. Seu Domínio (SEM http/www, ex: painel.site.com): " DOMAIN
+read -p "1. Seu Domínio (ex: painel.site.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
-    echo -e "${RED}Erro: Domínio é obrigatório!${NC}"
+    echo -e "${RED}Erro: O domínio é um campo obrigatório!${NC}"
     exit 1
 fi
 
-read -p "2. Seu E-mail (para o certificado SSL): " EMAIL_SSL
+read -p "2. Seu E-mail (usado para o certificado SSL): " EMAIL_SSL
 
-echo ""
-echo -e "${YELLOW}--- ARQUIVO .ENV (MÉTODO SEGURO) ---${NC}"
-echo -e "${BLUE}O script abrirá o editor de texto NANO agora.${NC}"
-echo "1. Quando abrir, COLE seu conteúdo."
-echo "2. Pressione CTRL+O e ENTER para salvar."
-echo "3. Pressione CTRL+X para sair."
-echo -e "${GREEN}Pressione ENTER para abrir o editor...${NC}"
-read -r wait_input
+# PERGUNTA CONDICIONAL PARA SSL E NGINX
+read -p "3. Deseja configurar/reconfigurar o Nginx e o SSL (s/N)? " CONFIGURE_SSL
 
-# Limpa arquivo anterior e abre o nano
-rm -f .env
-touch .env
-nano .env
+# Se o .env não existir (primeira instalação), solicita o preenchimento
+if [ ! -f ".env" ]; then
+    echo ""
+    echo -e "${YELLOW}--- ARQUIVO .ENV (PRIMEIRA INSTALAÇÃO) ---${NC}"
+    echo -e "${BLUE}O editor de texto NANO será aberto para você colar o conteúdo do .env.${NC}"
+    echo "1. Cole o conteúdo no editor."
+    echo "2. Pressione CTRL+O e depois ENTER para salvar."
+    echo "3. Pressione CTRL+X para sair."
+    echo -e "${GREEN}Pressione ENTER para continuar...${NC}"
+    read -r
+    
+    nano .env
 
-# Verifica se o usuário salvou algo
-if [ ! -s .env ]; then
-    echo -e "${RED}ERRO: O arquivo .env está vazio! Você não salvou ou não colou.${NC}"
-    echo "Abortando instalação para evitar erros."
-    exit 1
+    if [ ! -s .env ]; then
+        echo -e "${RED}ERRO: O arquivo .env está vazio. Instalação abortada.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
 fi
-
-echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
 
 # ===================================================
 # 2. INSTALAÇÃO DE DEPENDÊNCIAS
 # ===================================================
-echo -e "${YELLOW}Instalando dependências do Linux...${NC}"
-# Nota: ffmpeg mantido pois é essencial para stickers e áudios do bot
+echo -e "${YELLOW}Instalando/Atualizando dependências do sistema...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get update -qq
 sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot python3-certbot-nginx -qq
@@ -69,61 +68,49 @@ sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot 
 # ===================================================
 # 3. INSTALAÇÃO DO NODE.JS
 # ===================================================
-echo -e "${YELLOW}Instalando módulos do Painel...${NC}"
+echo -e "${YELLOW}Instalando/Atualizando módulos do Node.js...${NC}"
 rm -rf node_modules package-lock.json
-
-if [ ! -f "package.json" ]; then npm init -y; fi
-
-npm install \
-    @google/generative-ai @whiskeysockets/baileys adm-zip archiver axios \
-    bcrypt cookie-parser dotenv express express-session mercadopago multer \
-    passport passport-google-oauth20 passport-local pino session-file-store \
-    socket.io socket.io-client telegraf qrcode-terminal
+npm install --silent
 
 # ===================================================
-# 4. AJUSTES FINAIS
+# 4. ESTRUTURA E PERMISSÕES
 # ===================================================
-echo -e "${YELLOW}Realizando ajustes finais...${NC}"
-
-# A. Substituição de domínio (se necessário)
-grep -rl "zappbot.shop" index.html | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
-
-# B. Renomeia o arquivo principal do servidor
-if [ -f "app.js" ]; then mv app.js server.js; fi
-
-# ===================================================
-# 5. ESTRUTURA E PERMISSÕES
-# ===================================================
+echo -e "${YELLOW}Verificando estrutura de arquivos e permissões...${NC}"
 mkdir -p uploads sessions auth_sessions
 for db in users.json bots.json groups.json settings.json; do
     if [ ! -f "$db" ]; then echo "{}" > "$db"; fi
 done
 chmod -R 777 uploads sessions auth_sessions *.json
+if [ -f "app.js" ]; then mv app.js server.js; fi
 
 # ===================================================
-# 6. INICIALIZAÇÃO (PM2)
+# 5. INICIALIZAÇÃO (PM2)
 # ===================================================
-echo -e "${YELLOW}Iniciando servidor com PM2...${NC}"
-npm install pm2 -g
-pm2 delete painel >/dev/null 2>&1
-pm2 start server.js --name "painel"
+echo -e "${YELLOW}Reiniciando o serviço da aplicação com PM2...${NC}"
+npm install pm2 -g --silent
+# Verifica se o processo já existe para decidir entre restart e start
+if pm2 describe painel > /dev/null; then
+    pm2 restart painel
+else
+    pm2 start server.js --name "painel"
+fi
 pm2 save
 pm2 startup
 
 # ===================================================
-# 7. NGINX E SSL
+# 6. NGINX E SSL (CONDICIONAL)
 # ===================================================
-echo -e "${YELLOW}Configurando Proxy Reverso com Nginx...${NC}"
-NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
+# A linha abaixo converte a resposta para minúscula para a verificação
+if [[ "${CONFIGURE_SSL,,}" == "s" ]]; then
+    echo -e "${YELLOW}Configurando Proxy Reverso com Nginx...${NC}"
+    NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
 
-cat > $NGINX_CONF <<EOF
+    cat > $NGINX_CONF <<EOF
 server {
     server_name ${DOMAIN};
     root /var/www/bot-whatsapp;
-
-    location ~ /.well-known/acme-challenge {
-        allow all;
-    }
+    
+    location ~ /.well-known/acme-challenge { allow all; }
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -131,34 +118,28 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        client_max_body_size 100M;
     }
 }
 EOF
 
-ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-rm -f /etc/nginx/sites-available/zappbot
-rm -f /etc/nginx/sites-enabled/zappbot
+    ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+    sudo nginx -t && sudo systemctl restart nginx
 
-sudo nginx -t && sudo systemctl restart nginx
-
-if [ ! -z "$EMAIL_SSL" ]; then
-    echo -e "${YELLOW}Gerando certificado SSL com Certbot...${NC}"
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw allow 3000/tcp
-
-    sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
+    if [ ! -z "$EMAIL_SSL" ]; then
+        echo -e "${YELLOW}Gerando certificado SSL com Certbot...${NC}"
+        sudo ufw allow 'Nginx Full'
+        sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
+    else
+        echo -e "${RED}E-mail não informado. Geração de SSL ignorada.${NC}"
+    fi
 else
-    echo -e "${RED}E-mail não informado. A configuração de SSL foi ignorada.${NC}"
+    echo -e "${YELLOW}Configuração de Nginx e SSL ignorada, conforme solicitado.${NC}"
 fi
 
 echo "---------------------------------------------------"
-echo -e "${GREEN}✅ INSTALAÇÃO CONCLUÍDA!${NC}"
+echo -e "${GREEN}✅ PROCESSO CONCLUÍDO!${NC}"
 echo "---------------------------------------------------"
 echo "Seu painel deve estar acessível em: https://$DOMAIN"
+echo "(Lembre-se de verificar se seu DNS está apontando corretamente)."
 echo "---------------------------------------------------"
