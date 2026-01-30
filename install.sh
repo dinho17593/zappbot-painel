@@ -23,19 +23,16 @@ cd "$TARGET_DIR" || exit 1
 # 1. COLETA DE DADOS INTERATIVA
 # ===================================================
 echo -e "${BLUE}---------------------------------------------------${NC}"
-echo -e "${BLUE}       DADOS DO SISTEMA E PERSONALIZAÇÃO           ${NC}"
+echo -e "${BLUE}           DADOS DO SERVIDOR E SSL               ${NC}"
 echo -e "${BLUE}---------------------------------------------------${NC}"
 
-read -p "1. Nome do Sistema (ex: ZapBot): " APP_NAME
-if [ -z "$APP_NAME" ]; then APP_NAME="ZappBot"; fi
-
-read -p "2. Seu Domínio (SEM http/www, ex: painel.site.com): " DOMAIN
+read -p "1. Seu Domínio (SEM http/www, ex: painel.site.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
     echo -e "${RED}Erro: Domínio é obrigatório!${NC}"
     exit 1
 fi
 
-read -p "3. Seu E-mail (para o certificado SSL): " EMAIL_SSL
+read -p "2. Seu E-mail (para o certificado SSL): " EMAIL_SSL
 
 echo ""
 echo -e "${YELLOW}--- ARQUIVO .ENV (MÉTODO SEGURO) ---${NC}"
@@ -60,11 +57,8 @@ fi
 
 echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
 
-# Cria slug para o package.json
-APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+\|-+$//g' | tr A-Z a-z)
-
 # ===================================================
-# 2. INSTALAÇÃO DO SISTEMA
+# 2. INSTALAÇÃO DE DEPENDÊNCIAS
 # ===================================================
 echo -e "${YELLOW}Instalando dependências do Linux...${NC}"
 # Nota: ffmpeg mantido pois é essencial para stickers e áudios do bot
@@ -87,20 +81,14 @@ npm install \
     socket.io socket.io-client telegraf qrcode-terminal
 
 # ===================================================
-# 4. PROCESSAMENTO DE MARCA (NOMES)
+# 4. AJUSTES FINAIS
 # ===================================================
-echo -e "${YELLOW}Aplicando personalização de nomes...${NC}"
+echo -e "${YELLOW}Realizando ajustes finais...${NC}"
 
-# A. Substituição de textos (Nome e Domínio)
-grep -rl "ZappBot" index.html manifest.json | xargs sed -i "s/ZappBot/$APP_NAME/g" 2>/dev/null
+# A. Substituição de domínio (se necessário)
 grep -rl "zappbot.shop" index.html | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
 
-# B. Ajustes técnicos no package.json
-if [ -f "package.json" ]; then
-    sed -i "s/\"name\": \"zappbot-shopp\"/\"name\": \"$APP_SLUG\"/g" package.json
-    sed -i "s/\"name\": \"zappbot-painel\"/\"name\": \"$APP_SLUG\"/g" package.json
-fi
-
+# B. Renomeia o arquivo principal do servidor
 if [ -f "app.js" ]; then mv app.js server.js; fi
 
 # ===================================================
@@ -115,7 +103,7 @@ chmod -R 777 uploads sessions auth_sessions *.json
 # ===================================================
 # 6. INICIALIZAÇÃO (PM2)
 # ===================================================
-echo -e "${YELLOW}Iniciando servidor...${NC}"
+echo -e "${YELLOW}Iniciando servidor com PM2...${NC}"
 npm install pm2 -g
 pm2 delete painel >/dev/null 2>&1
 pm2 start server.js --name "painel"
@@ -125,14 +113,14 @@ pm2 startup
 # ===================================================
 # 7. NGINX E SSL
 # ===================================================
-echo -e "${YELLOW}Configurando Proxy Nginx...${NC}"
+echo -e "${YELLOW}Configurando Proxy Reverso com Nginx...${NC}"
 NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
 
 cat > $NGINX_CONF <<EOF
 server {
     server_name ${DOMAIN};
     root /var/www/bot-whatsapp;
-    
+
     location ~ /.well-known/acme-challenge {
         allow all;
     }
@@ -153,24 +141,24 @@ EOF
 
 ln -s -f $NGINX_CONF /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-rm -f /etc/nginx/sites-available/zappbot 
+rm -f /etc/nginx/sites-available/zappbot
 rm -f /etc/nginx/sites-enabled/zappbot
 
 sudo nginx -t && sudo systemctl restart nginx
 
 if [ ! -z "$EMAIL_SSL" ]; then
-    echo -e "${YELLOW}Gerando certificado SSL...${NC}"
+    echo -e "${YELLOW}Gerando certificado SSL com Certbot...${NC}"
     sudo ufw allow 80/tcp
     sudo ufw allow 443/tcp
     sudo ufw allow 3000/tcp
-    
+
     sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL_SSL --redirect
 else
-    echo -e "${RED}E-mail não informado. SSL ignorado.${NC}"
+    echo -e "${RED}E-mail não informado. A configuração de SSL foi ignorada.${NC}"
 fi
 
 echo "---------------------------------------------------"
 echo -e "${GREEN}✅ INSTALAÇÃO CONCLUÍDA!${NC}"
 echo "---------------------------------------------------"
-echo "Acesse: https://$DOMAIN"
+echo "Seu painel deve estar acessível em: https://$DOMAIN"
 echo "---------------------------------------------------"
