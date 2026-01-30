@@ -96,6 +96,7 @@ ensureFirstUserIsAdmin();
 
 const defaultSettings = {
     mpAccessToken: "", 
+    supportNumber: "5524999842338",
     priceMonthly: "29.90", 
     priceQuarterly: "79.90",
     priceSemiannual: "149.90", 
@@ -206,7 +207,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     });
 }
 
-// --- ROTA DE UPLOAD DE ÍCONES (CORRIGIDA) ---
+// --- ROTA DE UPLOAD DE ÍCONES (ADICIONADA) ---
 app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name: 'iconLarge' }]), (req, res) => {
     if (!req.session.user || !req.session.user.isAdmin) {
         return res.status(403).json({ success: false, message: 'Acesso negado.' });
@@ -216,36 +217,14 @@ app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name
         // Processar ícone pequeno (192x192)
         if (req.files['iconSmall']) {
             const tempPath = req.files['iconSmall'][0].path;
-            
-            // Caminho antigo (com caractere especial) para deletar
-            const oldPath = path.join(BASE_DIR, 'icon-192×192.png');
-            // Caminho novo (padronizado com 'x')
-            const targetPath = path.join(BASE_DIR, 'icon-192x192.png');
-            
-            // Se existir o arquivo antigo com nome estranho, deleta
-            if (fs.existsSync(oldPath)) {
-                try { fs.unlinkSync(oldPath); } catch(e) {}
-            }
-
-            // Move o novo arquivo (sobrescreve se já existir o 'x')
+            const targetPath = path.join(BASE_DIR, 'icon-192×192.png');
             fs.renameSync(tempPath, targetPath);
         }
 
         // Processar ícone grande (512x512)
         if (req.files['iconLarge']) {
             const tempPath = req.files['iconLarge'][0].path;
-            
-            // Caminho antigo (com caractere especial) para deletar
-            const oldPath = path.join(BASE_DIR, 'icon-512×512.png');
-            // Caminho novo (padronizado com 'x')
-            const targetPath = path.join(BASE_DIR, 'icon-512x512.png');
-            
-            // Se existir o arquivo antigo com nome estranho, deleta
-            if (fs.existsSync(oldPath)) {
-                try { fs.unlinkSync(oldPath); } catch(e) {}
-            }
-
-            // Move o novo arquivo (sobrescreve se já existir o 'x')
+            const targetPath = path.join(BASE_DIR, 'icon-512×512.png');
             fs.renameSync(tempPath, targetPath);
         }
 
@@ -642,6 +621,7 @@ io.on('connection', (socket) => {
         socket.on('get-public-prices', () => {
             const s = readDB(SETTINGS_DB_PATH);
             socket.emit('public-prices', { 
+                supportNumber: s.supportNumber,
                 priceMonthly: s.priceMonthly, 
                 priceQuarterly: s.priceQuarterly, 
                 priceSemiannual: s.priceSemiannual, 
@@ -659,6 +639,7 @@ io.on('connection', (socket) => {
                 writeDB(SETTINGS_DB_PATH, ns); 
                 socket.emit('feedback', { success: true, message: 'Salvo' }); 
                 io.emit('public-prices', { 
+                    supportNumber: ns.supportNumber,
                     priceMonthly: ns.priceMonthly, 
                     priceQuarterly: ns.priceQuarterly, 
                     priceSemiannual: ns.priceSemiannual, 
@@ -1166,3 +1147,4 @@ server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
     restartActiveBots();
 });
+
