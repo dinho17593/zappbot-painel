@@ -1548,7 +1548,12 @@
                             </div>
                             <span style="font-size:0.75rem; color:${statusColor}; border:1px solid ${statusColor}; padding:4px 8px; border-radius:4px; font-weight:bold;">${statusText}</span>
                         </div>
-                        <div style="font-size:0.8rem; color:#888; margin-bottom:10px;">Vence em: <span style="color:#fff; font-weight:600;">${formatDate(group.expiresAt)}</span></div>
+                        
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:0.8rem; color:#888;">
+                            <div>Criado: <strong style="color:#ccc;">${formatDate(group.createdAt)}</strong></div>
+                            <div>Vence: <strong style="color:#fff;">${formatDate(group.expiresAt)}</strong></div>
+                        </div>
+
                         <div class="nested-group-actions">
                             ${toggleButton}
                             ${editButton}
