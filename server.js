@@ -206,6 +206,56 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     });
 }
 
+// --- ROTA DE UPLOAD DE ÍCONES (CORRIGIDA) ---
+app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name: 'iconLarge' }]), (req, res) => {
+    if (!req.session.user || !req.session.user.isAdmin) {
+        return res.status(403).json({ success: false, message: 'Acesso negado.' });
+    }
+
+    try {
+        // Processar ícone pequeno (192x192)
+        if (req.files['iconSmall']) {
+            const tempPath = req.files['iconSmall'][0].path;
+            
+            // Caminho antigo (com caractere especial) para deletar
+            const oldPath = path.join(BASE_DIR, 'icon-192×192.png');
+            // Caminho novo (padronizado com 'x')
+            const targetPath = path.join(BASE_DIR, 'icon-192x192.png');
+            
+            // Se existir o arquivo antigo com nome estranho, deleta
+            if (fs.existsSync(oldPath)) {
+                try { fs.unlinkSync(oldPath); } catch(e) {}
+            }
+
+            // Move o novo arquivo (sobrescreve se já existir o 'x')
+            fs.renameSync(tempPath, targetPath);
+        }
+
+        // Processar ícone grande (512x512)
+        if (req.files['iconLarge']) {
+            const tempPath = req.files['iconLarge'][0].path;
+            
+            // Caminho antigo (com caractere especial) para deletar
+            const oldPath = path.join(BASE_DIR, 'icon-512×512.png');
+            // Caminho novo (padronizado com 'x')
+            const targetPath = path.join(BASE_DIR, 'icon-512x512.png');
+            
+            // Se existir o arquivo antigo com nome estranho, deleta
+            if (fs.existsSync(oldPath)) {
+                try { fs.unlinkSync(oldPath); } catch(e) {}
+            }
+
+            // Move o novo arquivo (sobrescreve se já existir o 'x')
+            fs.renameSync(tempPath, targetPath);
+        }
+
+        res.json({ success: true, message: 'Ícones atualizados com sucesso! A página será recarregada.' });
+    } catch (error) {
+        console.error('Erro upload icones:', error);
+        res.status(500).json({ success: false, message: 'Erro ao processar imagens.' });
+    }
+});
+
 app.get('/api/admin/backup', (req, res) => {
     if (!req.session.user || !req.session.user.isAdmin) return res.status(403).send('Acesso negado');
 
@@ -591,7 +641,6 @@ io.on('connection', (socket) => {
 
         socket.on('get-public-prices', () => {
             const s = readDB(SETTINGS_DB_PATH);
-            // CORREÇÃO: Enviando as chaves corretas para o frontend
             socket.emit('public-prices', { 
                 priceMonthly: s.priceMonthly, 
                 priceQuarterly: s.priceQuarterly, 
@@ -609,7 +658,6 @@ io.on('connection', (socket) => {
             socket.on('save-settings', (ns) => { 
                 writeDB(SETTINGS_DB_PATH, ns); 
                 socket.emit('feedback', { success: true, message: 'Salvo' }); 
-                // CORREÇÃO: Emitindo atualização de preços para todos
                 io.emit('public-prices', { 
                     priceMonthly: ns.priceMonthly, 
                     priceQuarterly: ns.priceQuarterly, 
@@ -705,11 +753,9 @@ io.on('connection', (socket) => {
             }
             const botSessionName = group.managedByBot;
             
-            // 1. Remove from DB first
             delete groups[groupId];
             writeDB(GROUPS_DB_PATH, groups);
             
-            // 2. IMPORTANT: Tell connected bots to clear this group from memory IMMEDIATELY
             io.emit('group-removed', { botSessionName, groupId });
 
             socket.emit('group-list-updated', Object.values(groups).filter(g => g.owner === user.username));
