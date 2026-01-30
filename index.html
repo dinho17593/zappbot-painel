@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -479,6 +480,13 @@
                     <h4 style="color: var(--cyan); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
                     <form id="admin-settings-form">
                         <div class="input-group"><label class="input-label">Token MercadoPago (Produção)</label><input type="text" id="mp-access-token" placeholder="APP_USR-xxxxxxxx..." required></div>
+                        
+                        <div class="input-group">
+                            <label class="input-label">Número de Suporte (WhatsApp)</label>
+                            <span class="help-text">Número que aparecerá no botão flutuante de suporte (com DDD).</span>
+                            <input type="number" id="admin-support-number" placeholder="5524999842338">
+                        </div>
+
                         <div class="section-divider-title">Preços Renovação (Individual & Grupos)</div>
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                             <div><label style="font-size:0.75rem; color:#888;">Mensal (R$)</label><input type="number" id="price-monthly" step="0.01"></div>
@@ -788,7 +796,7 @@
         </div>
     </div>
 
-    <a href="https://wa.me/5524999842338" target="_blank" class="btn-support" title="Falar com Suporte">
+    <a id="btn-support-float" href="#" target="_blank" class="btn-support" title="Falar com Suporte">
         <i class="fab fa-whatsapp"></i>
     </a>
 
@@ -1166,11 +1174,17 @@
             
             socket.on('admin-settings', (s) => { 
                 document.getElementById('mp-access-token').value = s.mpAccessToken || ''; 
+                document.getElementById('admin-support-number').value = s.supportNumber || '';
                 // Os preços são atualizados pelo evento public-prices também
             });
 
             socket.on('public-prices', (prices) => { 
                 publicPrices = prices || {}; 
+
+                // Atualiza o botão flutuante de suporte
+                if (prices.supportNumber) {
+                    document.getElementById('btn-support-float').href = `https://wa.me/${prices.supportNumber}`;
+                }
 
                 // Atualiza inputs do admin se existirem na tela
                 if(document.getElementById('price-monthly')) {
@@ -1990,6 +2004,7 @@
             e.preventDefault(); 
             socket.emit('save-settings', { 
                 mpAccessToken: document.getElementById('mp-access-token').value, 
+                supportNumber: document.getElementById('admin-support-number').value,
                 priceMonthly: document.getElementById('price-monthly').value,
                 priceQuarterly: document.getElementById('price-quarterly').value,
                 priceSemiannual: document.getElementById('price-semiannual').value,
