@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT DE CONFIGURAÇÃO (CORRIGIDO LOGO + ENV) ---
+# --- SCRIPT DE CONFIGURAÇÃO (CORRIGIDO: ENV WAIT + LOGO) ---
 
 TARGET_DIR="/var/www/bot-whatsapp"
 
@@ -43,18 +43,20 @@ echo ""
 echo -e "${YELLOW}--- ARQUIVO .ENV COMPLETO ---${NC}"
 echo -e "${BLUE}Cole abaixo o conteúdo INTEIRO do seu arquivo .env:${NC}"
 echo "(Inclua todas as chaves do Google, Gemini, etc)"
-echo -e "${GREEN}>>> COLE AGORA. O sistema aguardará 1 segundo de silêncio para salvar.${NC}"
+echo -e "${GREEN}>>> O SCRIPT ESTÁ PAUSADO AGUARDANDO VOCÊ COLAR.${NC}"
+echo -e "${GREEN}>>> Cole o texto e aguarde o processamento automático.${NC}"
 echo "---------------------------------------------------"
 
 # Limpa arquivo anterior
 rm -f .env
 touch .env
 
-# Lógica de leitura (Timeout de 1s para garantir colagem completa)
-while IFS= read -r -t 1 line || [ -n "$line" ]; do
-    if [ -z "$line" ] && [ $? -ne 0 ]; then
-        break
-    fi
+# 1. Lê a primeira linha (BLOQUEANTE - Espera até você colar algo)
+IFS= read -r first_line
+echo "$first_line" >> .env
+
+# 2. Lê o restante do buffer da colagem (Timeout curto para detectar o fim da colagem)
+while IFS= read -r -t 0.2 line; do
     echo "$line" >> .env
 done
 
@@ -99,12 +101,11 @@ if [ ! -z "$LOGO_URL" ]; then
     echo "Baixando logo..."
     LOGO_URL=$(echo "$LOGO_URL" | sed 's/dl=0/dl=1/g') # Fix Dropbox
     
-    # Usa CURL com User-Agent para evitar erro 403/Bloqueio em sites como ImgBB
+    # Usa CURL com User-Agent para evitar erro 403
     curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "$LOGO_URL" -o logo_temp
     
     if [ -s logo_temp ]; then
         echo "Processando imagem..."
-        # Tenta converter. Se falhar (exit code != 0), avisa o erro.
         if ffmpeg -y -i logo_temp -vf scale=192:192 icon-192.png -loglevel error && \
            ffmpeg -y -i logo_temp -vf scale=512:512 icon-512.png -loglevel error; then
             
@@ -112,12 +113,11 @@ if [ ! -z "$LOGO_URL" ]; then
             rm logo_temp
             echo -e "${GREEN}✅ Logos atualizadas com sucesso!${NC}"
         else
-            echo -e "${RED}❌ Erro ao processar a imagem.${NC}"
-            echo "O link pode não ser uma imagem direta ou está protegido."
+            echo -e "${RED}❌ Erro ao processar a imagem (Formato inválido ou bloqueado).${NC}"
             rm logo_temp
         fi
     else
-        echo -e "${RED}❌ Falha no download da logo (Arquivo vazio).${NC}"
+        echo -e "${RED}❌ Falha no download da logo.${NC}"
     fi
 fi
 
