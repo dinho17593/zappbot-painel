@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SCRIPT DE CONFIGURAÇÃO (CORRIGIDO: ENV WAIT + LOGO) ---
+# --- SCRIPT DE CONFIGURAÇÃO (VERSÃO FINAL - NANO + CURL FIX) ---
 
 TARGET_DIR="/var/www/bot-whatsapp"
 
@@ -12,6 +12,10 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${GREEN}--- CONFIGURANDO SERVIDOR ---${NC}"
+
+# Garante que o nano e curl estejam instalados antes de tudo
+sudo apt-get update -qq
+sudo apt-get install -y nano curl -qq
 
 cd "$TARGET_DIR" || exit 1
 
@@ -40,27 +44,27 @@ echo "Deixe em branco para usar a padrão."
 read -p "URL da Logo: " LOGO_URL
 
 echo ""
-echo -e "${YELLOW}--- ARQUIVO .ENV COMPLETO ---${NC}"
-echo -e "${BLUE}Cole abaixo o conteúdo INTEIRO do seu arquivo .env:${NC}"
-echo "(Inclua todas as chaves do Google, Gemini, etc)"
-echo -e "${GREEN}>>> O SCRIPT ESTÁ PAUSADO AGUARDANDO VOCÊ COLAR.${NC}"
-echo -e "${GREEN}>>> Cole o texto e aguarde o processamento automático.${NC}"
-echo "---------------------------------------------------"
+echo -e "${YELLOW}--- ARQUIVO .ENV (MÉTODO SEGURO) ---${NC}"
+echo -e "${BLUE}O script abrirá o editor de texto NANO agora.${NC}"
+echo "1. Quando abrir, COLE seu conteúdo."
+echo "2. Pressione CTRL+O e ENTER para salvar."
+echo "3. Pressione CTRL+X para sair."
+echo -e "${GREEN}Pressione ENTER para abrir o editor...${NC}"
+read -r wait_input
 
-# Limpa arquivo anterior
+# Limpa arquivo anterior e abre o nano
 rm -f .env
 touch .env
+nano .env
 
-# 1. Lê a primeira linha (BLOQUEANTE - Espera até você colar algo)
-IFS= read -r first_line
-echo "$first_line" >> .env
+# Verifica se o usuário salvou algo
+if [ ! -s .env ]; then
+    echo -e "${RED}ERRO: O arquivo .env está vazio! Você não salvou ou não colou.${NC}"
+    echo "Abortando instalação para evitar erros."
+    exit 1
+fi
 
-# 2. Lê o restante do buffer da colagem (Timeout curto para detectar o fim da colagem)
-while IFS= read -r -t 0.2 line; do
-    echo "$line" >> .env
-done
-
-echo -e "${GREEN}Arquivo .env recebido e salvo!${NC}"
+echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
 
 # Cria slug para o package.json
 APP_SLUG=$(echo "$APP_NAME" | iconv -t ascii//TRANSLIT | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+\|-+$//g' | tr A-Z a-z)
@@ -96,16 +100,26 @@ echo -e "${YELLOW}Aplicando personalização visual...${NC}"
 grep -rl "ZappBot" index.html manifest.json | xargs sed -i "s/ZappBot/$APP_NAME/g" 2>/dev/null
 grep -rl "zappbot.shop" index.html | xargs sed -i "s/zappbot.shop/$DOMAIN/g" 2>/dev/null
 
-# B. Download e Conversão da Logo (CORRIGIDO)
+# B. Download e Conversão da Logo (CORRIGIDO COM HEADERS REAIS)
 if [ ! -z "$LOGO_URL" ]; then
     echo "Baixando logo..."
     LOGO_URL=$(echo "$LOGO_URL" | sed 's/dl=0/dl=1/g') # Fix Dropbox
     
-    # Usa CURL com User-Agent para evitar erro 403
-    curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "$LOGO_URL" -o logo_temp
+    # Remove arquivo anterior se existir
+    rm -f logo_temp
     
-    if [ -s logo_temp ]; then
-        echo "Processando imagem..."
+    # CURL com headers completos para simular um navegador real e ignorar SSL (-k)
+    curl -k -L \
+         -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+         -H "Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" \
+         "$LOGO_URL" -o logo_temp
+    
+    # Verifica se o arquivo baixado é realmente uma imagem
+    FILE_TYPE=$(file --mime-type -b logo_temp)
+    
+    if [[ "$FILE_TYPE" == image/* ]]; then
+        echo "Imagem detectada ($FILE_TYPE). Processando..."
+        
         if ffmpeg -y -i logo_temp -vf scale=192:192 icon-192.png -loglevel error && \
            ffmpeg -y -i logo_temp -vf scale=512:512 icon-512.png -loglevel error; then
             
@@ -113,11 +127,15 @@ if [ ! -z "$LOGO_URL" ]; then
             rm logo_temp
             echo -e "${GREEN}✅ Logos atualizadas com sucesso!${NC}"
         else
-            echo -e "${RED}❌ Erro ao processar a imagem (Formato inválido ou bloqueado).${NC}"
+            echo -e "${RED}❌ Erro no FFmpeg. O arquivo pode estar corrompido.${NC}"
             rm logo_temp
         fi
     else
-        echo -e "${RED}❌ Falha no download da logo.${NC}"
+        echo -e "${RED}❌ O link fornecido não retornou uma imagem válida.${NC}"
+        echo "Tipo recebido: $FILE_TYPE"
+        echo "Conteúdo (primeiras linhas):"
+        head -n 3 logo_temp
+        rm logo_temp
     fi
 fi
 
