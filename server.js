@@ -1096,5 +1096,3 @@ server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
     restartActiveBots();
 });
-
-
