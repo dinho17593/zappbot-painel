@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -13,10 +11,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="zappbot">
     
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <link rel="icon" type="image/png" href="icon-192.png">
-    <link rel="shortcut icon" href="icon-192.png" type="image/x-icon">
+    <!-- Padronizado para 'x' (letra) ao invés de '×' (símbolo) -->
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+    <link rel="icon" type="image/png" href="icon-192x192.png">
+    <link rel="shortcut icon" href="icon-192x192.png" type="image/x-icon">
     <link rel="manifest" href="/manifest.json">
+
+    <script>
+        // Cache buster para os ícones do navegador e PWA
+        (function() {
+            try {
+                const time = new Date().getTime();
+                const icons = document.querySelectorAll('link[rel*="icon"]');
+                icons.forEach(icon => {
+                    if(icon.href) icon.href = icon.href.split('?')[0] + '?v=' + time;
+                });
+            } catch(e) {}
+        })();
+    </script>
 
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -292,6 +304,26 @@
     .type-card i { font-size: 2rem; color: var(--primary); margin-bottom: 5px; }
     .type-card h4 { margin: 0; font-size: 1rem; color: var(--text-main); }
     .type-card p { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+    
+    .icon-preview-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255,255,255,0.03);
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+    }
+    .icon-preview-img {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        border-radius: 12px;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border);
+        padding: 5px;
+    }
 </style>
 </head>
 <body>
@@ -408,13 +440,15 @@
                     
                     <form id="upload-icons-form" style="display: flex; flex-direction: column; gap: 15px;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div>
+                            <div class="icon-preview-container">
                                 <label class="input-label">Ícone Pequeno (192x192)</label>
-                                <input type="file" name="iconSmall" accept="image/png" required>
+                                <img id="preview-icon-small" src="/icon-192x192.png" class="icon-preview-img">
+                                <input type="file" id="input-icon-small" name="iconSmall" accept="image/png" required>
                             </div>
-                            <div>
+                            <div class="icon-preview-container">
                                 <label class="input-label">Ícone Grande (512x512)</label>
-                                <input type="file" name="iconLarge" accept="image/png" required>
+                                <img id="preview-icon-large" src="/icon-512x512.png" class="icon-preview-img">
+                                <input type="file" id="input-icon-large" name="iconLarge" accept="image/png" required>
                             </div>
                         </div>
                         <button type="submit" class="btn-primary" style="background: var(--purple-dark); color: #fff;">
@@ -813,6 +847,33 @@
                     enterDashboard(data.user);
                 }
             } catch (e) { console.log("Sessão expirada ou não logado."); }
+
+            // Lógica de prévia de imagem
+            function setupImagePreview(inputId, imgId) {
+                const input = document.getElementById(inputId);
+                const img = document.getElementById(imgId);
+                
+                if(input && img) {
+                    // Adiciona timestamp para evitar cache na imagem inicial
+                    const currentSrc = img.src;
+                    if(currentSrc && !currentSrc.includes('data:')) {
+                        img.src = currentSrc.split('?')[0] + '?v=' + new Date().getTime();
+                    }
+
+                    input.addEventListener('change', function(e) {
+                        if (e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                img.src = e.target.result;
+                            }
+                            reader.readAsDataURL(e.target.files[0]);
+                        }
+                    });
+                }
+            }
+
+            setupImagePreview('input-icon-small', 'preview-icon-small');
+            setupImagePreview('input-icon-large', 'preview-icon-large');
         });
 
         function enterDashboard(user) {
