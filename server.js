@@ -764,7 +764,8 @@ io.on('connection', (socket) => {
                     botName: d.botName || '',
                     silenceTime: d.silenceTime || 0,
                     platform: d.platform || 'whatsapp',
-                    token: d.token || ''
+                    token: d.token || '',
+                    notificationNumber: ''
                 };
 
                 bots[d.sessionName] = newBot;
@@ -853,6 +854,7 @@ io.on('connection', (socket) => {
                 
                 bot.botName = d.botName;
                 bot.silenceTime = d.silenceTime;
+                bot.notificationNumber = d.notificationNumber;
 
                 writeDB(BOTS_DB_PATH, bots);
                 io.emit('bot-updated', bot);
@@ -991,7 +993,8 @@ function startBotProcess(bot, phoneNumber = null) {
         bot.botName || '',
         (bot.silenceTime || '0').toString(),
         bot.platform || 'whatsapp',
-        bot.token || ''
+        bot.token || '',
+        bot.notificationNumber || ''
     ];
 
     const p = spawn('node', args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -1006,7 +1009,7 @@ function startBotProcess(bot, phoneNumber = null) {
             updateBotStatus(bot.sessionName, 'Aguardando QR Code', { qr: msg.replace('QR_CODE:', '') });
         } else if (msg.startsWith('PAIRING_CODE:')) {
             updateBotStatus(bot.sessionName, 'Aguardando QR Code', { qr: msg });
-        } else if (msg.includes('ONLINE!')) {
+        } else if (msg.includes('ONLINE!') || msg.includes('Conectado ao servidor via Socket.IO')) {
             updateBotStatus(bot.sessionName, 'Online', { setActivated: true });
         }
         io.emit('log-message', { sessionName: bot.sessionName, message: msg });
@@ -1093,3 +1096,5 @@ server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
     restartActiveBots();
 });
+
+
