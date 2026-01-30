@@ -20,45 +20,67 @@ sudo apt-get install -y nano curl -qq
 cd "$TARGET_DIR" || exit 1
 
 # ===================================================
-# 1. COLETA DE DADOS INTERATIVA
+# 1. COLETA DE DADOS DO SERVIDOR
 # ===================================================
 echo -e "${BLUE}---------------------------------------------------${NC}"
 echo -e "${BLUE}           DADOS DO SERVIDOR E SSL               ${NC}"
 echo -e "${BLUE}---------------------------------------------------${NC}"
 
-read -p "1. Seu Domínio (ex: painel.site.com): " DOMAIN
+read -p "1. Digite seu Domínio (ex: painel.site.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
     echo -e "${RED}Erro: O domínio é um campo obrigatório!${NC}"
     exit 1
 fi
 
-read -p "2. Seu E-mail (usado para o certificado SSL): " EMAIL_SSL
+read -p "2. Digite seu E-mail (usado para o certificado SSL): " EMAIL_SSL
 
-# PERGUNTA CONDICIONAL PARA SSL E NGINX
-read -p "3. Deseja configurar/reconfigurar o Nginx e o SSL (s/N)? " CONFIGURE_SSL
+# ===================================================
+# 2. CONFIGURAÇÃO DO ARQUIVO .ENV (LÓGICA MELHORADA)
+# ===================================================
 
-# Se o .env não existir (primeira instalação), solicita o preenchimento
-if [ ! -f ".env" ]; then
+# Função para encapsular o processo de edição
+edit_env_file() {
     echo ""
-    echo -e "${YELLOW}--- ARQUIVO .ENV (PRIMEIRA INSTALAÇÃO) ---${NC}"
-    echo -e "${BLUE}O editor de texto NANO será aberto para você colar o conteúdo do .env.${NC}"
-    echo "1. Cole o conteúdo no editor."
-    echo "2. Pressione CTRL+O e depois ENTER para salvar."
-    echo "3. Pressione CTRL+X para sair."
-    echo -e "${GREEN}Pressione ENTER para continuar...${NC}"
+    echo -e "${BLUE}O editor de texto NANO será aberto para você colar/editar o conteúdo.${NC}"
+    echo "1. Cole ou edite as variáveis de ambiente."
+    echo -e "2. Pressione ${YELLOW}CTRL+O${NC} e depois ${YELLOW}ENTER${NC} para SALVAR."
+    echo -e "3. Pressione ${YELLOW}CTRL+X${NC} para SAIR."
+    echo -e "${GREEN}Pressione ENTER para abrir o editor agora...${NC}"
     read -r
     
     nano .env
 
+    # Validação para garantir que o arquivo não ficou vazio
     if [ ! -s .env ]; then
-        echo -e "${RED}ERRO: O arquivo .env está vazio. Instalação abortada.${NC}"
+        echo -e "${RED}ERRO: O arquivo .env está vazio! A instalação não pode continuar.${NC}"
+        echo "Abortando..."
         exit 1
     fi
     echo -e "${GREEN}Arquivo .env salvo com sucesso!${NC}"
+}
+
+# Verifica se o arquivo .env existe para decidir a ação
+if [ ! -f ".env" ]; then
+    # Se NÃO existe, a criação é OBRIGATÓRIA.
+    echo ""
+    echo -e "${YELLOW}--- ARQUIVO .ENV (PRIMEIRA INSTALAÇÃO) ---${NC}"
+    echo "Nenhum arquivo de configuração (.env) foi encontrado. É necessário criá-lo agora."
+    touch .env # Cria o arquivo para o nano não dar erro
+    edit_env_file
+else
+    # Se JÁ existe, o usuário pode escolher se quer editar.
+    echo ""
+    echo -e "${YELLOW}--- ARQUIVO .ENV ENCONTRADO ---${NC}"
+    read -p "Um arquivo .env já existe. Deseja editá-lo agora? (s/N): " EDIT_ENV
+    if [[ "${EDIT_ENV,,}" == "s" ]]; then
+        edit_env_file
+    else
+        echo "Ok, mantendo o arquivo .env existente."
+    fi
 fi
 
 # ===================================================
-# 2. INSTALAÇÃO DE DEPENDÊNCIAS
+# 3. INSTALAÇÃO DE DEPENDÊNCIAS
 # ===================================================
 echo -e "${YELLOW}Instalando/Atualizando dependências do sistema...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -66,14 +88,14 @@ sudo apt-get update -qq
 sudo apt-get install -y nodejs nginx build-essential git python3 ffmpeg certbot python3-certbot-nginx -qq
 
 # ===================================================
-# 3. INSTALAÇÃO DO NODE.JS
+# 4. INSTALAÇÃO DO NODE.JS
 # ===================================================
 echo -e "${YELLOW}Instalando/Atualizando módulos do Node.js...${NC}"
 rm -rf node_modules package-lock.json
 npm install --silent
 
 # ===================================================
-# 4. ESTRUTURA E PERMISSÕES
+# 5. ESTRUTURA E PERMISSÕES
 # ===================================================
 echo -e "${YELLOW}Verificando estrutura de arquivos e permissões...${NC}"
 mkdir -p uploads sessions auth_sessions
@@ -84,23 +106,19 @@ chmod -R 777 uploads sessions auth_sessions *.json
 if [ -f "app.js" ]; then mv app.js server.js; fi
 
 # ===================================================
-# 5. INICIALIZAÇÃO (PM2)
+# 6. INICIALIZAÇÃO (PM2)
 # ===================================================
-echo -e "${YELLOW}Reiniciando o serviço da aplicação com PM2...${NC}"
+echo -e "${YELLOW}Reiniciando a aplicação com PM2...${NC}"
 npm install pm2 -g --silent
-# Verifica se o processo já existe para decidir entre restart e start
-if pm2 describe painel > /dev/null; then
-    pm2 restart painel
-else
-    pm2 start server.js --name "painel"
-fi
+pm2 start server.js --name "painel" --update-env || pm2 restart painel
 pm2 save
 pm2 startup
 
 # ===================================================
-# 6. NGINX E SSL (CONDICIONAL)
+# 7. NGINX E SSL (CONDICIONAL)
 # ===================================================
-# A linha abaixo converte a resposta para minúscula para a verificação
+read -p "Deseja configurar/reconfigurar o Nginx e o certificado SSL para o domínio ${DOMAIN}? (s/N): " CONFIGURE_SSL
+
 if [[ "${CONFIGURE_SSL,,}" == "s" ]]; then
     echo -e "${YELLOW}Configurando Proxy Reverso com Nginx...${NC}"
     NGINX_CONF="/etc/nginx/sites-available/bot-whatsapp"
@@ -108,7 +126,7 @@ if [[ "${CONFIGURE_SSL,,}" == "s" ]]; then
     cat > $NGINX_CONF <<EOF
 server {
     server_name ${DOMAIN};
-    root /var/www/bot-whatsapp;
+    root ${TARGET_DIR};
     
     location ~ /.well-known/acme-challenge { allow all; }
     location / {
@@ -141,5 +159,5 @@ echo "---------------------------------------------------"
 echo -e "${GREEN}✅ PROCESSO CONCLUÍDO!${NC}"
 echo "---------------------------------------------------"
 echo "Seu painel deve estar acessível em: https://$DOMAIN"
-echo "(Lembre-se de verificar se seu DNS está apontando corretamente)."
+echo "(Verifique se o DNS do seu domínio está apontando corretamente para o IP deste servidor)."
 echo "---------------------------------------------------"
