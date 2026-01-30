@@ -1,10 +1,13 @@
 
+
+
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Painel zappbot</title>
+    <title>zappbot</title>
     
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="theme-color" content="#121214">
@@ -479,6 +482,11 @@
                 <div class="form-section" style="border-color: var(--cyan);">
                     <h4 style="color: var(--cyan); margin-top: 0; margin-bottom: 15px;"><i class="fas fa-cog"></i> Preços e Configurações</h4>
                     <form id="admin-settings-form">
+                        <div class="input-group">
+                            <label class="input-label">Nome da Aplicação</label>
+                            <input type="text" id="admin-app-name" placeholder="zappbot">
+                        </div>
+
                         <div class="input-group"><label class="input-label">Token MercadoPago (Produção)</label><input type="text" id="mp-access-token" placeholder="APP_USR-xxxxxxxx..." required></div>
                         
                         <div class="input-group">
@@ -1051,6 +1059,23 @@
             document.getElementById('create-step-1').classList.remove('hidden');
         }
 
+        function updateAppBranding(name) {
+            if(!name) return;
+            document.title = name;
+            
+            // Atualiza meta tag para iOS
+            const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if(appleTitle) appleTitle.content = name;
+
+            // Atualiza logo no header
+            const brand = document.querySelector('.brand-center');
+            if(brand) brand.innerHTML = `<i class="fas fa-robot"></i> ${name}`;
+            
+            // Atualiza tela de login
+            const loginTitle = document.querySelector('#auth-section h2');
+            if(loginTitle) loginTitle.innerText = name;
+        }
+
         function initializeSocket() {
             if (socket && socket.connected) return;
             socket = io();
@@ -1173,6 +1198,7 @@
             });
             
             socket.on('admin-settings', (s) => { 
+                document.getElementById('admin-app-name').value = s.appName || 'zappbot';
                 document.getElementById('mp-access-token').value = s.mpAccessToken || ''; 
                 document.getElementById('admin-support-number').value = s.supportNumber || '';
                 // Os preços são atualizados pelo evento public-prices também
@@ -1180,6 +1206,9 @@
 
             socket.on('public-prices', (prices) => { 
                 publicPrices = prices || {}; 
+
+                // Atualiza nome da aplicação
+                updateAppBranding(prices.appName);
 
                 // Atualiza o botão flutuante de suporte
                 if (prices.supportNumber) {
@@ -2003,6 +2032,7 @@
         document.getElementById('admin-settings-form').onsubmit=(e)=>{ 
             e.preventDefault(); 
             socket.emit('save-settings', { 
+                appName: document.getElementById('admin-app-name').value,
                 mpAccessToken: document.getElementById('mp-access-token').value, 
                 supportNumber: document.getElementById('admin-support-number').value,
                 priceMonthly: document.getElementById('price-monthly').value,
