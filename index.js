@@ -899,3 +899,4 @@ if (platform === 'telegram') {
 
 process.on('uncaughtException', (err) => { console.error('Exceção não tratada:', err); });
 process.on('unhandledRejection', (reason, promise) => { console.error('Rejeição não tratada:', reason); });
+
