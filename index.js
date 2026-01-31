@@ -16,6 +16,28 @@ const io = require('socket.io-client');
 const axios = require('axios');
 
 // =================================================================================
+// CLASSE AUXILIAR DE CACHE (Para corrigir MessageCounterError e Bad MAC)
+// =================================================================================
+class SimpleCache {
+    constructor() {
+        this.cache = new Map();
+    }
+    get(key) {
+        return this.cache.get(key);
+    }
+    set(key, value) {
+        this.cache.set(key, value);
+    }
+    del(key) {
+        this.cache.delete(key);
+    }
+    flushAll() {
+        this.cache.clear();
+    }
+}
+const msgRetryCounterCache = new SimpleCache();
+
+// =================================================================================
 // CONFIGURAÇÃO E ARGUMENTOS
 // =================================================================================
 
@@ -122,7 +144,7 @@ const safetySettings = [
 let genAI = new GoogleGenerativeAI(API_KEYS[currentApiKeyIndex]);
 let model = genAI.getGenerativeModel({ model: modeloGemini, safetySettings });
 
-const logger = pino({ level: 'error' }); 
+const logger = pino({ level: 'silent' }); // Alterado para silent para reduzir ruído no terminal, use 'info' ou 'debug' para ver logs internos
 
 const historicoConversa = {};
 const MAX_HISTORICO_POR_USUARIO = 20;
@@ -587,15 +609,23 @@ if (platform === 'telegram') {
         const { state, saveCreds } = await useMultiFileAuthState(authPath);
         const { version } = await fetchLatestBaileysVersion();
 
+        // Configuração ajustada para evitar MessageCounterError e Bad MAC
         const sock = makeWASocket({
             version, 
             logger, 
-            printQRInTerminal: !phoneNumberArg,
+            // printQRInTerminal REMOVIDO pois está depreciado
             auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
             syncFullHistory: false, 
             markOnlineOnConnect: true,
             generateHighQualityLinkPreview: true, 
-            browser: ["Ubuntu", "Chrome", "20.0.04"]
+            browser: ["Ubuntu", "Chrome", "20.0.04"],
+            // CORREÇÕES ADICIONADAS ABAIXO:
+            msgRetryCounterCache, // Cache para re-solicitar chaves perdidas
+            connectTimeoutMs: 60000, // Timeout maior para estabilizar conexão
+            keepAliveIntervalMs: 10000, // Ping mais frequente para manter sessão viva
+            retryRequestDelayMs: 250, // Delay entre tentativas
+            emitOwnEvents: true,
+            fireInitQueries: false
         });
 
         socket.off('group-activation-result');
@@ -623,12 +653,29 @@ if (platform === 'telegram') {
             if (qr && !phoneNumberArg) console.log(`QR_CODE:${qr}`);
             if (connection === 'close') {
                 const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                
+                // Se o erro for BAD SESSION, pode ser necessário limpar
+                if (lastDisconnect?.error?.toString()?.includes('Bad MAC')) {
+                    console.log(`[${nomeSessao}] ⚠️ Erro crítico de sessão (Bad MAC). Tentando reconectar...`);
+                }
+
                 if (shouldReconnect) setTimeout(ligarBot, 5000);
                 else process.exit(0);
             }
             if (connection === 'open') {
                 console.log('\nONLINE!'); 
                 socket.emit('bot-online', { sessionName: nomeSessao });
+                
+                // --- ATUALIZAÇÃO DE NOME PÚBLICO ---
+                try {
+                    const user = sock.user;
+                    if (user) {
+                        const name = user.name || user.id.split(':')[0];
+                        socket.emit('bot-identified', { sessionName: nomeSessao, publicName: name });
+                    }
+                } catch (e) {
+                    console.error('Erro ao enviar nome do bot:', e);
+                }
             }
         });
 
@@ -899,4 +946,3 @@ if (platform === 'telegram') {
 
 process.on('uncaughtException', (err) => { console.error('Exceção não tratada:', err); });
 process.on('unhandledRejection', (reason, promise) => { console.error('Rejeição não tratada:', reason); });
-
