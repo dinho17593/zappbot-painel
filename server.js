@@ -46,15 +46,31 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(SESSION_SECRET));
 
-app.use(express.static(BASE_DIR));
+// Desativa cache para arquivos estáticos sensíveis, se houver
+app.use(express.static(BASE_DIR, {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+    }
+}));
 
 const sessionMiddleware = session({
-    store: new FileStore({ path: SESSION_FILES_DIR, logFn: function () { } }),
+    store: new FileStore({ 
+        path: SESSION_FILES_DIR, 
+        logFn: function () { },
+        retries: 1,
+        ttl: 86400 * 7
+    }),
+    name: 'zappbot.sid',
     secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
         secure: false,
+        httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7
     }
 });
@@ -208,7 +224,6 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     });
 }
 
-// --- ROTA DINÂMICA DO MANIFEST.JSON ---
 app.get('/manifest.json', (req, res) => {
     const settings = readDB(SETTINGS_DB_PATH);
     const appName = settings.appName || 'zappbot';
@@ -238,28 +253,23 @@ app.get('/manifest.json', (req, res) => {
     });
 });
 
-// --- ROTA DE UPLOAD DE ÍCONES ---
 app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name: 'iconLarge' }]), (req, res) => {
     if (!req.session.user || !req.session.user.isAdmin) {
         return res.status(403).json({ success: false, message: 'Acesso negado.' });
     }
 
     try {
-        // Processar ícone pequeno (192x192)
         if (req.files['iconSmall']) {
             const tempPath = req.files['iconSmall'][0].path;
             const targetPath = path.join(BASE_DIR, 'icon-192x192.png');
-            // Remove arquivo antigo se existir (com nome errado ou certo)
             if(fs.existsSync(path.join(BASE_DIR, 'icon-192×192.png'))) fs.unlinkSync(path.join(BASE_DIR, 'icon-192×192.png'));
             if(fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
             fs.renameSync(tempPath, targetPath);
         }
 
-        // Processar ícone grande (512x512)
         if (req.files['iconLarge']) {
             const tempPath = req.files['iconLarge'][0].path;
             const targetPath = path.join(BASE_DIR, 'icon-512x512.png');
-            // Remove arquivo antigo se existir
             if(fs.existsSync(path.join(BASE_DIR, 'icon-512×512.png'))) fs.unlinkSync(path.join(BASE_DIR, 'icon-512×512.png'));
             if(fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
             fs.renameSync(tempPath, targetPath);
@@ -492,7 +502,6 @@ app.post('/webhook/mercadopago', async (req, res) => {
 
                         const botSessionName = group.managedByBot;
                         if (activeBots[botSessionName]) {
-                            console.log(`[PAGAMENTO GRUPO] Reiniciando bot agregador: ${botSessionName}`);
                             activeBots[botSessionName].intentionalStop = true;
                             activeBots[botSessionName].process.kill('SIGINT');
                             setTimeout(() => {
@@ -588,21 +597,41 @@ app.get('/auth/google/callback', (req, res, next) => {
     })(req, res, next);
 });
 
-app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
+// Rota de Logout corrigida para limpar cookies e destruir sessão
+app.get('/logout', (req, res) => {
+    req.session.destroy((err) => {
+        res.clearCookie('zappbot.sid'); // Limpa o cookie da sessão
+        res.redirect('/');
+    });
+});
 
+// Rota de verificação de sessão com Cache-Control agressivo
 app.get('/check-session', (req, res) => {
+    // Impede que o navegador faça cache desta resposta
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+
     if (req.session.user) {
-        const u = readDB(USERS_DB_PATH)[req.session.user.username.toLowerCase()];
+        const users = readDB(USERS_DB_PATH);
+        const u = users[req.session.user.username.toLowerCase()];
+        
         if (u) {
             req.session.user.isAdmin = u.isAdmin;
             res.json({ loggedIn: true, user: { ...req.session.user, botLimit: u.botLimit || 1 } });
         } else {
+            // Usuário na sessão não existe mais no DB (Sessão Zumbi)
             req.session.destroy();
+            res.clearCookie('zappbot.sid');
             res.status(401).json({ loggedIn: false });
         }
-    } else res.status(401).json({ loggedIn: false });
+    } else {
+        res.status(401).json({ loggedIn: false });
+    }
 });
 
+// Middleware do Socket.IO corrigido para rejeitar conexões inválidas
 io.use((socket, next) => {
     const sessionUser = socket.request.session.user || (socket.request.session.passport?.user);
 
@@ -617,7 +646,8 @@ io.use((socket, next) => {
             };
             next();
         } else {
-            next(new Error('User not found in DB'));
+            // Usuário não encontrado no DB, rejeita conexão
+            next(new Error('Authentication error'));
         }
     } else {
         next();
@@ -627,8 +657,23 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
     const user = socket.request.session.user;
     
+    socket.on('get-public-prices', () => {
+        const s = readDB(SETTINGS_DB_PATH);
+        socket.emit('public-prices', { 
+            appName: s.appName || 'zappbot',
+            supportNumber: s.supportNumber,
+            priceMonthly: s.priceMonthly, 
+            priceQuarterly: s.priceQuarterly, 
+            priceSemiannual: s.priceSemiannual, 
+            priceYearly: s.priceYearly, 
+            priceResell5: s.priceResell5, 
+            priceResell10: s.priceResell10, 
+            priceResell20: s.priceResell20, 
+            priceResell30: s.priceResell30 
+        });
+    });
+
     socket.on('bot-online', ({ sessionName }) => {
-        console.log(`[SOCKET] Bot ${sessionName} reportou ONLINE via socket.`);
         updateBotStatus(sessionName, 'Online', { setActivated: true });
     });
 
@@ -637,7 +682,6 @@ io.on('connection', (socket) => {
         if (groups[data.groupId]) {
             groups[data.groupId] = { ...groups[data.groupId], ...data.settings };
             writeDB(GROUPS_DB_PATH, groups);
-            console.log(`[CONFIG] Grupo ${data.groupId} atualizado:`, data.settings);
             
             io.to(groups[data.groupId].owner.toLowerCase()).emit('group-list-updated', Object.values(groups).filter(g => g.owner === groups[data.groupId].owner));
             
@@ -654,22 +698,6 @@ io.on('connection', (socket) => {
         socket.join(user.username.toLowerCase());
         const uData = readDB(USERS_DB_PATH)[user.username];
         socket.emit('session-info', { username: user.username, isAdmin: user.isAdmin, botLimit: uData?.botLimit || 1 });
-
-        socket.on('get-public-prices', () => {
-            const s = readDB(SETTINGS_DB_PATH);
-            socket.emit('public-prices', { 
-                appName: s.appName || 'zappbot',
-                supportNumber: s.supportNumber,
-                priceMonthly: s.priceMonthly, 
-                priceQuarterly: s.priceQuarterly, 
-                priceSemiannual: s.priceSemiannual, 
-                priceYearly: s.priceYearly, 
-                priceResell5: s.priceResell5, 
-                priceResell10: s.priceResell10, 
-                priceResell20: s.priceResell20, 
-                priceResell30: s.priceResell30 
-            });
-        });
 
         if (user.isAdmin) {
             socket.on('admin-settings', (s) => socket.emit('admin-settings', readDB(SETTINGS_DB_PATH)));
@@ -728,7 +756,6 @@ io.on('connection', (socket) => {
 
                     const botSessionName = group.managedByBot;
                     if (activeBots[botSessionName]) {
-                        console.log(`[ADMIN GROUP DAYS] Reiniciando bot ${botSessionName} para aplicar novos dias.`);
                         activeBots[botSessionName].intentionalStop = true;
                         activeBots[botSessionName].process.kill('SIGINT');
                         delete activeBots[botSessionName];
@@ -782,7 +809,6 @@ io.on('connection', (socket) => {
             socket.emit('feedback', { success: true, message: 'Grupo removido com sucesso.' });
             
             if (activeBots[botSessionName]) {
-                console.log(`[DELETE GROUP] Reiniciando bot ${botSessionName} para aplicar remoção do grupo.`);
                 activeBots[botSessionName].intentionalStop = true;
                 activeBots[botSessionName].process.kill('SIGINT');
                 delete activeBots[botSessionName];
@@ -907,6 +933,28 @@ io.on('connection', (socket) => {
             let users = readDB(USERS_DB_PATH);
             const botToDelete = bots[sessionName];
             if (!botToDelete || (!user.isAdmin && botToDelete.owner !== user.username)) return;
+            
+            // --- LÓGICA DE EXCLUSÃO EM CASCATA (GRUPOS) ---
+            if (botToDelete.botType === 'group') {
+                let groups = readDB(GROUPS_DB_PATH);
+                let groupsChanged = false;
+                
+                // Encontra e remove todos os grupos gerenciados por este bot
+                Object.keys(groups).forEach(groupId => {
+                    if (groups[groupId].managedByBot === sessionName) {
+                        delete groups[groupId];
+                        groupsChanged = true;
+                    }
+                });
+
+                if (groupsChanged) {
+                    writeDB(GROUPS_DB_PATH, groups);
+                    // Notifica clientes para atualizar a lista de grupos
+                    io.emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)));
+                }
+            }
+            // ------------------------------------------------
+
             if (botToDelete.botType !== 'group') {
                 const owner = users[botToDelete.owner];
                 const expirationDate = new Date(botToDelete.trialExpiresAt);
@@ -919,18 +967,26 @@ io.on('connection', (socket) => {
                     socket.emit('feedback', { success: true, message: 'Bot excluído.' });
                 }
             } else {
-                 socket.emit('feedback', { success: true, message: 'Bot Agregador excluído.' });
+                 socket.emit('feedback', { success: true, message: 'Bot Agregador e seus grupos foram excluídos.' });
             }
+
+            // --- PARAR PROCESSO NA VPS (RAM) ---
             if (activeBots[sessionName]) {
                 activeBots[sessionName].intentionalStop = true;
                 activeBots[sessionName].process.kill('SIGINT');
                 delete activeBots[sessionName];
             }
+
+            // --- REMOVER DO BANCO DE DADOS (BOTS) ---
             delete bots[sessionName];
             writeDB(BOTS_DB_PATH, bots);
-            if (fs.existsSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`))) {
-                fs.rmSync(path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`), { recursive: true, force: true });
+
+            // --- REMOVER ARQUIVOS DE SESSÃO (DISCO) ---
+            const authPath = path.join(AUTH_SESSIONS_DIR, `auth_${sessionName}`);
+            if (fs.existsSync(authPath)) {
+                fs.rmSync(authPath, { recursive: true, force: true });
             }
+
             io.emit('bot-deleted', { sessionName });
         });
 
@@ -979,12 +1035,9 @@ io.on('connection', (socket) => {
     }
 
     socket.on('group-activation-request', ({ groupId, groupName, activationToken, botSessionName }) => {
-        console.log(`[SERVIDOR] Recebido 'group-activation-request' do bot ${botSessionName}.`);
-        
         const tokenData = activationTokens[activationToken];
 
         if (!tokenData || tokenData.expiresAt < Date.now()) {
-            console.error(`[SERVIDOR] Token inválido ou expirado.`);
             io.emit('group-activation-result', { 
                 success: false, 
                 groupId, 
@@ -1030,7 +1083,6 @@ io.on('connection', (socket) => {
 
         groups[groupId] = newGroup;
         writeDB(GROUPS_DB_PATH, groups);
-        console.log(`[SERVIDOR] Grupo '${groupName}' ativado (Trial 24h). Dono: ${ownerEmail}.`);
 
         io.to(ownerEmail.toLowerCase()).emit('group-list-updated', Object.values(readDB(GROUPS_DB_PATH)).filter(g => g.owner === ownerEmail));
         io.to(ownerEmail.toLowerCase()).emit('feedback', { success: true, message: `Grupo "${groupName}" ativado! Verifique o card do robô.` });
@@ -1107,12 +1159,9 @@ function startBotProcess(bot, phoneNumber = null) {
     p.stderr.on('data', (d) => io.emit('log-message', { sessionName: bot.sessionName, message: `ERRO: ${d}` }));
     
     p.on('close', (code) => {
-        console.log(`[PROCESS] ${bot.sessionName} fechou com código ${code}`);
-        
         if (activeBots[bot.sessionName]?.intentionalStop) {
             updateBotStatus(bot.sessionName, 'Offline');
         }
-        
         delete activeBots[bot.sessionName];
     });
 }
@@ -1148,18 +1197,14 @@ function updateBotStatus(name, status, options = {}) {
 
 function restartActiveBots() {
     const bots = readDB(BOTS_DB_PATH);
-    console.log('[SISTEMA] Verificando bots para reiniciar...');
-
     Object.values(bots).forEach(bot => {
         if (bot.status === 'Online' || bot.status.includes('Iniciando') || bot.status.includes('Aguardando')) {
             const now = new Date();
             const expires = new Date(bot.trialExpiresAt);
 
             if (expires > now) {
-                console.log(`[RESTART] Reiniciando bot: ${bot.sessionName}`);
                 startBotProcess(bot);
             } else {
-                console.log(`[RESTART] Bot ${bot.sessionName} expirou, não será reiniciado.`);
                 bot.status = 'Offline';
             }
         }
@@ -1168,7 +1213,6 @@ function restartActiveBots() {
 }
 
 const gracefulShutdown = () => {
-    console.log('[SISTEMA] Encerrando servidor, matando processos filhos...');
     Object.keys(activeBots).forEach(sessionName => {
         if (activeBots[sessionName]) {
             try {
