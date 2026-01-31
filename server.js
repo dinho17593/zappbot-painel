@@ -283,7 +283,8 @@ app.post('/api/admin/upload-icons', upload.fields([{ name: 'iconSmall' }, { name
 });
 
 app.get('/api/admin/backup', (req, res) => {
-    if (!req.session.user || !req.session.user.isAdmin) return res.status(403).send('Acesso negado');
+    // Removida a verificação de isAdmin para permitir backup para todos
+    if (!req.session.user) return res.status(401).send('Acesso negado');
 
     const archive = archiver('zip', { zlib: { level: 9 } });
     const fileName = `backup_zappbot_${new Date().toISOString().split('T')[0]}.zip`;
@@ -305,7 +306,8 @@ app.get('/api/admin/backup', (req, res) => {
 });
 
 app.post('/api/admin/restore', upload.single('backupFile'), (req, res) => {
-    if (!req.session.user || !req.session.user.isAdmin) return res.status(403).json({ error: 'Acesso negado' });
+    // Removida a verificação de isAdmin para permitir restauração para todos
+    if (!req.session.user) return res.status(401).json({ error: 'Acesso negado' });
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
     try {
@@ -677,6 +679,15 @@ io.on('connection', (socket) => {
         updateBotStatus(sessionName, 'Online', { setActivated: true });
     });
 
+    socket.on('bot-identified', ({ sessionName, publicName }) => {
+        const bots = readDB(BOTS_DB_PATH);
+        if (bots[sessionName]) {
+            bots[sessionName].publicName = publicName;
+            writeDB(BOTS_DB_PATH, bots);
+            io.emit('bot-updated', bots[sessionName]);
+        }
+    });
+
     socket.on('update-group-settings', (data) => {
         const groups = readDB(GROUPS_DB_PATH);
         if (groups[data.groupId]) {
@@ -881,7 +892,8 @@ io.on('connection', (socket) => {
                     silenceTime: d.silenceTime || 0,
                     platform: d.platform || 'whatsapp',
                     token: d.token || '',
-                    notificationNumber: ''
+                    notificationNumber: '',
+                    publicName: ''
                 };
 
                 bots[d.sessionName] = newBot;
@@ -1230,3 +1242,4 @@ server.listen(3000, () => {
     console.log('Painel ON: http://localhost:3000');
     restartActiveBots();
 });
+
