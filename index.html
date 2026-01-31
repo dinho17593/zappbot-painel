@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -821,31 +820,15 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             
+            // Inicializa o socket imediatamente para receber atualizações de branding
+            initializeSocket();
+
+            // REMOÇÃO AGRESSIVA DE SERVICE WORKERS ANTIGOS
             if ('serviceWorker' in navigator) {
-                const updateBar = document.getElementById('pwa-update-bar');
-                const updateBtn = document.getElementById('pwa-update-btn');
-                let newWorker;
-
-                navigator.serviceWorker.register('/sw.js').then(reg => {
-                    reg.addEventListener('updatefound', () => {
-                        newWorker = reg.installing;
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                updateBar.classList.add('show');
-                            }
-                        });
-                    });
-                });
-
-                updateBtn.addEventListener('click', () => {
-                    newWorker.postMessage({ type: 'SKIP_WAITING' });
-                });
-
-                let refreshing;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (refreshing) return;
-                    window.location.reload();
-                    refreshing = true;
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
                 });
             }
 
@@ -859,12 +842,21 @@
             }
 
             try {
-                const response = await fetch('/check-session');
+                // Adiciona timestamp para evitar cache do navegador
+                const response = await fetch('/check-session?t=' + new Date().getTime());
                 const data = await response.json();
                 if (response.ok && data.loggedIn) {
                     enterDashboard(data.user);
+                } else {
+                    // Se a sessão não for válida, garante que a UI de login seja mostrada
+                    document.getElementById('auth-section').style.display = 'flex';
+                    document.getElementById('dashboard-container').classList.add('hidden');
                 }
-            } catch (e) { console.log("Sessão expirada ou não logado."); }
+            } catch (e) { 
+                console.log("Sessão expirada ou não logado."); 
+                document.getElementById('auth-section').style.display = 'flex';
+                document.getElementById('dashboard-container').classList.add('hidden');
+            }
 
             function setupImagePreview(inputId, imgId) {
                 const input = document.getElementById(inputId);
@@ -902,8 +894,16 @@
             } else {
                 document.getElementById('admin-menu-btn').classList.add('hidden');
             }
-
-            initializeSocket();
+            
+            // Se o socket já estiver conectado, solicitamos os dados do usuário
+            if (socket && socket.connected) {
+                socket.emit('get-my-bots');
+                socket.emit('get-my-groups');
+                if (user.isAdmin) {
+                    socket.emit('admin-get-users');
+                    socket.emit('admin-settings');
+                }
+            }
         }
 
         function toggleSidebar() {
@@ -1008,6 +1008,14 @@
 
         function confirmLogout() {
             if (confirm('Tem certeza que deseja sair do painel?')) {
+                // Remove Service Workers para evitar cache agressivo
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                }
                 window.location.href = '/logout';
             }
         }
@@ -1077,14 +1085,28 @@
             if (socket && socket.connected) return;
             socket = io();
 
+            socket.on('connect', () => {
+                // Solicita preços e branding imediatamente ao conectar
+                socket.emit('get-public-prices');
+            });
+
+            // Tratamento de erro de conexão (Autenticação falha)
+            socket.on('connect_error', (err) => {
+                if(err.message === 'Authentication error' || err.message === 'User not found in DB') {
+                    // Se o servidor rejeitar a conexão por auth, força logout
+                    window.location.href = '/logout';
+                }
+            });
+
             socket.on('session-info', (data) => {
                 currentUser = data;
                 updateUserLimitUI(data.botLimit || 1);
 
                 socket.emit('get-my-bots');
                 socket.emit('get-my-groups');
-                socket.emit('get-public-prices'); 
-
+                
+                // Se já recebemos os preços públicos, não precisamos pedir de novo, 
+                // mas se for admin, pedimos as configs completas
                 if (currentUser.isAdmin) {
                     socket.emit('admin-get-users');
                     socket.emit('admin-settings');
@@ -2254,3 +2276,4 @@
     </script>
 </body>
 </html>
+
